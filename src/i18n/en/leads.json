@@ -1,0 +1,9 @@
+{
+  "lead_not_found": "Lead not found",
+  "lead_already_closed": "This lead has already been closed",
+  "lead_assigned": "Lead assigned successfully",
+  "lead_closed": "Lead closed successfully",
+  "invalid_status": "Invalid lead status",
+  "budget_range_invalid": "Maximum budget cannot be less than minimum budget",
+  "property_required_for_closing": "A property must be selected to close a lead"
+}

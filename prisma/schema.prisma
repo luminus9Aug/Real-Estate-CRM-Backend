@@ -1,0 +1,322 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm, pgcrypto]
+}
+
+enum LeadStatus {
+  HOT
+  WARM
+  COLD
+  LOST
+  CONVERTED
+}
+
+enum LeadSource {
+  WHATSAPP
+  WALKIN
+  REFERENCE
+  FACEBOOK
+  GOOGLE
+  NINETY_NINE_ACRES
+  MAGICBRICKS
+  HOUSING
+  OTHER
+}
+
+enum PropertyType {
+  PLOT
+  APARTMENT
+  COMMERCIAL
+  VILLA
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  SOLD
+  HELD
+  BOOKED
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  AGENT
+  VIEWER
+}
+
+enum ActivityType {
+  CALL
+  VISIT
+  NOTE
+  EMAIL
+  WHATSAPP
+  MEETING
+}
+
+enum CommissionStatus {
+  PENDING
+  PAID
+  CANCELLED
+  DISPUTED
+}
+
+enum CommissionType {
+  PERCENT
+  FIXED
+}
+
+enum SupportedLanguage {
+  en
+  hi
+  ar
+}
+
+model Tenant {
+  id                 String              @id @default(cuid()) @map("id")
+  name               String              @db.VarChar(200) @map("name")
+  subdomain          String              @unique @db.VarChar(100) @map("subdomain")
+  logoUrl            String?             @db.Text @map("logo_url")
+  currency           String              @default("INR") @db.VarChar(3) @map("currency")
+  timezone           String              @default("Asia/Kolkata") @db.VarChar(50) @map("timezone")
+  phone              String?             @db.VarChar(20) @map("phone")
+  email              String?             @db.VarChar(200) @map("email")
+  address            String?             @db.Text @map("address")
+  defaultLanguage    SupportedLanguage   @default(en) @map("default_language")
+  supportedLanguages SupportedLanguage[] @map("supported_languages")
+  isActive           Boolean             @default(true) @map("is_active")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  users                  User[]
+  leads                  Lead[]
+  properties             Property[]
+  messages               Message[]
+  activities             Activity[]
+  followUps              FollowUp[]
+  commissionTransactions CommissionTransaction[]
+  brochureLinks          BrochureLink[]
+
+  @@index([subdomain])
+  @@map("tenants")
+}
+
+model User {
+  id                    String            @id @default(cuid()) @map("id")
+  tenantId              String            @map("tenant_id")
+  email                 String            @db.VarChar(200) @map("email")
+  phone                 String?           @db.VarChar(20) @map("phone")
+  name                  String            @db.VarChar(100) @map("name")
+  role                  UserRole          @default(AGENT) @map("role")
+  passwordHash          String            @db.Text @map("password_hash")
+  avatarUrl             String?           @db.Text @map("avatar_url")
+  isActive              Boolean           @default(true) @map("is_active")
+  lastLoginAt           DateTime?         @map("last_login_at")
+  birthday              DateTime?         @map("birthday")
+  anniversary           DateTime?         @map("anniversary")
+  language              SupportedLanguage @default(en) @map("language")
+  commissionRate        Decimal?          @default(0) @db.Decimal(5, 2) @map("commission_rate")
+  commissionType        CommissionType    @default(PERCENT) @map("commission_type")
+  fixedCommissionAmount Decimal?          @db.Decimal(12, 2) @map("fixed_commission_amount")
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+  deletedAt             DateTime?         @map("deleted_at")
+
+  tenant                 Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedLeads          Lead[]                   @relation("AssignedToUser")
+  createdLeads           Lead[]                   @relation("CreatedByUser")
+  activities             Activity[]
+  followUps              FollowUp[]
+  sentMessages           Message[]                @relation("MessageSender")
+  commissionTransactions CommissionTransaction[] @relation("AgentCommission")
+  createdCommissions     CommissionTransaction[] @relation("CommissionCreatedBy")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, role])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Lead {
+  id                  String             @id @default(cuid()) @map("id")
+  tenantId            String             @map("tenant_id")
+  assignedToId        String?            @map("assigned_to_id")
+  createdById         String             @map("created_by_id")
+  preferredPropertyId String?            @map("preferred_property_id")
+  closedPropertyId    String?            @map("closed_property_id")
+  name                String             @db.VarChar(100) @map("name")
+  phone               String             @db.VarChar(20) @map("phone")
+  email               String?            @db.VarChar(200) @map("email")
+  alternatePhone      String?            @db.VarChar(20) @map("alternate_phone")
+  budgetMin           Decimal?           @db.Decimal(12, 2) @map("budget_min")
+  budgetMax           Decimal?           @db.Decimal(12, 2) @map("budget_max")
+  message             String?            @db.Text @map("message")
+  status              LeadStatus         @default(HOT) @map("status")
+  source              LeadSource         @default(OTHER) @map("source")
+  customFields        Json?              @map("custom_fields")
+  nextFollowUpAt      DateTime?          @map("next_follow_up_at")
+  lastContactedAt     DateTime?          @map("last_contacted_at")
+  convertedAt         DateTime?          @map("converted_at")
+  closedAt            DateTime?          @map("closed_at")
+  lostReason          String?            @db.VarChar(255) @map("lost_reason")
+  preferredLanguage   SupportedLanguage? @map("preferred_language")
+  finalSaleValue      Decimal?           @db.Decimal(12, 2) @map("final_sale_value")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  deletedAt           DateTime?          @map("deleted_at")
+
+  tenant                   Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedTo               User?                     @relation("AssignedToUser", fields: [assignedToId], references: [id])
+  createdBy                User                      @relation("CreatedByUser", fields: [createdById], references: [id])
+  preferredProperty        Property?                 @relation("PreferredProperty", fields: [preferredPropertyId], references: [id])
+  closedProperty           Property?                 @relation("ClosedProperty", fields: [closedPropertyId], references: [id])
+  messages                 Message[]
+  activities               Activity[]
+  followUps                FollowUp[]
+  commissionTransactions CommissionTransaction[]
+
+  @@index([tenantId, status, nextFollowUpAt])
+  @@index([tenantId, assignedToId, status])
+  @@index([tenantId, phone])
+  @@index([tenantId, createdAt])
+  @@index([deletedAt])
+  @@map("leads")
+}
+
+model Property {
+  id          String         @id @default(cuid()) @map("id")
+  tenantId    String         @map("tenant_id")
+  title       String         @db.VarChar(200) @map("title")
+  description String?        @db.Text @map("description")
+  type        PropertyType   @map("type")
+  status      PropertyStatus @default(AVAILABLE) @map("status")
+  price       Decimal?       @db.Decimal(12, 2) @map("price")
+  areaSqFt    Int?           @map("area_sq_ft")
+  bhk         Int?           @map("bhk")
+  floor       String?        @db.VarChar(50) @map("floor")
+  location    String         @db.VarChar(255) @map("location")
+  latitude    Float?         @map("latitude")
+  longitude   Float?         @map("longitude")
+  images      String[]       @map("images")
+  brochures   String[]       @map("brochures")
+  features    Json?          @map("features")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  deletedAt   DateTime?      @map("deleted_at")
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  preferredBy   Lead[]         @relation("PreferredProperty")
+  closedBy      Lead[]         @relation("ClosedProperty")
+  brochureLinks BrochureLink[]
+
+  @@index([tenantId, status, type])
+  @@index([tenantId, price])
+  @@index([deletedAt])
+  @@map("properties")
+}
+
+model Message {
+  id          String    @id @default(cuid()) @map("id")
+  tenantId    String    @map("tenant_id")
+  leadId      String    @map("lead_id")
+  senderId    String?   @map("sender_id")
+  content     String    @db.Text @map("content")
+  isFromLead  Boolean   @default(true) @map("is_from_lead")
+  deliveredAt DateTime? @map("delivered_at")
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sender User?  @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@index([tenantId, leadId, createdAt])
+  @@map("messages")
+}
+
+model Activity {
+  id        String       @id @default(cuid()) @map("id")
+  tenantId  String       @map("tenant_id")
+  leadId    String       @map("lead_id")
+  userId    String       @map("user_id")
+  type      ActivityType @map("type")
+  notes     String?      @db.Text @map("notes")
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, leadId, createdAt])
+  @@map("activities")
+}
+
+model FollowUp {
+  id           String    @id @default(cuid()) @map("id")
+  tenantId     String    @map("tenant_id")
+  leadId       String    @map("lead_id")
+  assignedToId String    @map("assigned_to_id")
+  message      String?   @db.Text @map("message")
+  dueAt        DateTime  @map("due_at")
+  completedAt  DateTime? @map("completed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead       Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo User   @relation(fields: [assignedToId], references: [id])
+
+  @@index([tenantId, dueAt, completedAt])
+  @@index([tenantId, assignedToId, completedAt])
+  @@map("follow_ups")
+}
+
+model CommissionTransaction {
+  id               String           @id @default(cuid()) @map("id")
+  tenantId         String           @map("tenant_id")
+  leadId           String           @map("lead_id")
+  agentId          String           @map("agent_id")
+  createdById      String           @map("created_by_id")
+  amount           Decimal          @db.Decimal(12, 2) @map("amount")
+  currency         String           @default("INR") @db.VarChar(3) @map("currency")
+  status           CommissionStatus @default(PENDING) @map("status")
+  calculatedAt     DateTime         @default(now()) @map("calculated_at")
+  paidAt           DateTime?        @map("paid_at")
+  paymentReference String?          @db.VarChar(255) @map("payment_reference")
+  notes            String?          @db.Text @map("notes")
+  voidedAt         DateTime?        @map("voided_at")
+  voidReason       String?          @db.VarChar(255) @map("void_reason")
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead      Lead   @relation(fields: [leadId], references: [id])
+  agent     User   @relation("AgentCommission", fields: [agentId], references: [id])
+  createdBy User   @relation("CommissionCreatedBy", fields: [createdById], references: [id])
+
+  @@index([tenantId, agentId, status])
+  @@index([tenantId, leadId])
+  @@index([tenantId, calculatedAt])
+  @@map("commission_transactions")
+}
+
+model BrochureLink {
+  id          String    @id @default(cuid()) @map("id")
+  tenantId    String    @map("tenant_id")
+  propertyId  String    @map("property_id")
+  token       String    @unique @db.VarChar(64) @map("token")
+  expiresAt   DateTime  @map("expires_at")
+  openedCount Int       @default(0) @map("opened_count")
+  openedAt    DateTime? @map("opened_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([token])
+  @@index([expiresAt])
+  @@map("brochure_links")
+}

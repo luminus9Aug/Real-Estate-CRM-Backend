@@ -1,0 +1,7 @@
+{
+  "commission_paid": "تم دفع العمول بنجاح",
+  "already_paid": "تم دفع هذه العمول بالفعل",
+  "insufficient_permissions": "يمكن للمالكين فقط تحديد العمولات كمدفوعة",
+  "transaction_failed": "فشلت عملية الدفع",
+  "not_found": "عملية العمولة غير موجودة"
+}

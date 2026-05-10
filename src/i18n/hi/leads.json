@@ -1,0 +1,9 @@
+{
+  "lead_not_found": "लीड नहीं मिली",
+  "lead_already_closed": "यह लीड पहले ही बंद की जा चुकी है",
+  "lead_assigned": "लीड सफलतापूर्वक सौंपी गई",
+  "lead_closed": "लीड सफलतापूर्वक बंद की गई",
+  "invalid_status": "अमान्य लीड स्थिति",
+  "budget_range_invalid": "अधिकतम बजट न्यूनतम बजट से कम नहीं हो सकता",
+  "property_required_for_closing": "लीड बंद करने के लिए एक संपत्ति का चयन करना आवश्यक है"
+}

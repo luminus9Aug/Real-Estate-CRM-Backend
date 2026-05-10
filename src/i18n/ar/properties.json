@@ -1,0 +1,8 @@
+{
+  "property_not_found": "العقار غير موجود",
+  "invalid_type": "نوع العقار غير صالح",
+  "invalid_status": "حالة العقار غير صالحة",
+  "brochure_generated": "تم إنشاء رابط الكتيب بنجاح",
+  "update_success": "تم تحديث العقار بنجاح",
+  "delete_success": "تم حذف العقار بنجاح"
+}

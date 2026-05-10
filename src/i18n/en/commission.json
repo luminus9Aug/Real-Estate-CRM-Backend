@@ -1,0 +1,7 @@
+{
+  "commission_paid": "Commission paid successfully",
+  "already_paid": "This commission has already been paid",
+  "insufficient_permissions": "Only owners can mark commissions as paid",
+  "transaction_failed": "Payment transaction failed",
+  "not_found": "Commission transaction not found"
+}

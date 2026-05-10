@@ -1,0 +1,8 @@
+{
+  "property_not_found": "Property not found",
+  "invalid_type": "Invalid property type",
+  "invalid_status": "Invalid property status",
+  "brochure_generated": "Brochure link generated successfully",
+  "update_success": "Property updated successfully",
+  "delete_success": "Property deleted successfully"
+}

@@ -1,0 +1,6 @@
+# Production overrides: set secrets via env, use managed Postgres/Redis in cloud.
+services:
+  postgres:
+    profiles: ["disabled"]
+  redis:
+    profiles: ["disabled"]
