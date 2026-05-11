@@ -14,7 +14,7 @@ import { CreateLeadSchema, UpdateLeadSchema } from './schemas/create-lead.schema
 
 @Controller('leads')
 export class LeadController {
-  constructor(private readonly leads: LeadService) {}
+  constructor(private readonly leads: LeadService) { }
 
   @Get()
   list(
@@ -31,6 +31,7 @@ export class LeadController {
     @CurrentUser('id') userId: string,
     @Body() dto: CreateLeadDto,
   ): Promise<unknown> {
+    console.log("CurrentUser", CurrentUser)
     return this.leads.create(tenantId, userId, dto);
   }
 

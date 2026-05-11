@@ -106,7 +106,7 @@ const run = process.env.RUN_E2E === '1';
 
     // Tenant A tries to update Tenant B's lead
     const updateRes = await request(app.getHttpServer())
-      .patch(`/api/v1/leads/${leadId}`)
+      .put(`/api/v1/leads/${leadId}`)
       .set('Cookie', cookieA)
       .send({ name: 'Hacked' });
 

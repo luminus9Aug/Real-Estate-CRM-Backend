@@ -1,9 +1,11 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { urlencoded } from 'express';
 import helmet from 'helmet';
+import { RedisIoAdapter } from './common/adapters/redis-io.adapter';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -14,6 +16,12 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const logger = new Logger('Bootstrap');
+  const config = app.get(ConfigService);
+
+  const redisAdapter = new RedisIoAdapter(app);
+  const redisUrl = config.get<string>('redis.url') || 'redis://127.0.0.1:6379';
+  await redisAdapter.connectToRedis(redisUrl.replace('localhost', '127.0.0.1'));
+  app.useWebSocketAdapter(redisAdapter);
 
   app.use('/api/v1/messages/webhook/whatsapp', urlencoded({ extended: false }));
   app.use(cookieParser());

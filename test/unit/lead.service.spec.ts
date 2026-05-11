@@ -4,6 +4,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { LeadService } from '../../src/modules/lead/lead.service';
 import type { TenantPrismaService } from '../../src/common/utils/tenant-prisma.service';
 import type { MessageGateway } from '../../src/gateways/message.gateway';
+import { I18nService } from 'nestjs-i18n';
 import type Redis from 'ioredis';
 
 describe('LeadService', () => {
@@ -11,6 +12,7 @@ describe('LeadService', () => {
   let mockTenantPrisma: any;
   let mockRedis: any;
   let mockGateway: any;
+  let mockI18n: any;
 
   beforeEach(() => {
     mockTenantPrisma = {
@@ -42,11 +44,15 @@ describe('LeadService', () => {
     mockGateway = {
       emitLeadAssigned: jest.fn(),
     };
+    mockI18n = {
+      t: jest.fn((key) => key),
+    };
 
     service = new LeadService(
       mockTenantPrisma as unknown as TenantPrismaService,
       mockRedis as unknown as Redis,
       mockGateway as unknown as MessageGateway,
+      mockI18n as unknown as I18nService,
     );
   });
 

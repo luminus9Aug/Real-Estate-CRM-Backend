@@ -1,5 +1,6 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
-import { UserRole } from '@prisma/client';
+import { IsBoolean, IsDate, IsEmail, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl, MaxLength, Min, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { UserRole, CommissionType, Gender } from '@prisma/client';
 
 export class CreateUserDto {
   @IsEmail()
@@ -22,4 +23,41 @@ export class CreateUserDto {
 
   @IsEnum(UserRole)
   role!: UserRole;
+
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
+
+  @IsOptional()
+  @IsEnum(CommissionType)
+  commissionType?: CommissionType;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  commissionRate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fixedCommissionAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsUrl()
+  avatarUrl?: string;
+
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  birthday?: Date;
+
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  anniversary?: Date;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
