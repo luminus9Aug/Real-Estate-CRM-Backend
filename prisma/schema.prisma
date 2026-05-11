@@ -77,6 +77,12 @@ enum SupportedLanguage {
   ar
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
 model Tenant {
   id                 String              @id @default(cuid()) @map("id")
   name               String              @db.VarChar(200) @map("name")
@@ -113,6 +119,7 @@ model User {
   phone                 String?           @db.VarChar(20) @map("phone")
   name                  String            @db.VarChar(100) @map("name")
   role                  UserRole          @default(AGENT) @map("role")
+  gender                Gender            @default(MALE) @map("gender")
   passwordHash          String            @db.Text @map("password_hash")
   avatarUrl             String?           @db.Text @map("avatar_url")
   isActive              Boolean           @default(true) @map("is_active")

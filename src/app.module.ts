@@ -1,9 +1,10 @@
 import { BullModule } from '@nestjs/bullmq';
-import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer, Logger } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { I18nModule, HeaderResolver } from 'nestjs-i18n';
+import IORedis from 'ioredis';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
@@ -27,7 +28,7 @@ import { UserModule } from './modules/user/user.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { FollowupQueueModule } from './queues/followup/followup.queue.module';
 import { WhatsappQueueModule } from './queues/whatsapp/whatsapp.queue.module';
-import { RedisModule } from './redis/redis.module';
+import { RedisModule, BULL_REDIS } from './redis/redis.module';
 import { TenantPrismaModule } from './tenant-prisma/tenant-prisma.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -46,12 +47,10 @@ import { RolesGuard } from './common/guards/roles.guard';
     }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 200 }]),
     BullModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        connection: {
-          url: config.getOrThrow<string>('redis.url'),
-        },
+      imports: [RedisModule],
+      inject: [BULL_REDIS],
+      useFactory: (bullRedis: IORedis) => ({
+        connection: bullRedis,
       }),
     }),
     I18nModule.forRoot({

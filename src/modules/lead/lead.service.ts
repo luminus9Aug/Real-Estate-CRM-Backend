@@ -28,7 +28,7 @@ import { LeadFollowupDto } from './dto/lead-followup.dto';
 import { LeadQueryDto } from './dto/lead-query.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 
-import { calculateCommission, AgentForCommission } from '../../common/utils/commission-calculator.util';
+import { CommissionCalculator, AgentForCommission } from '../../common/utils/commission-calculator.util';
 
 @Injectable()
 export class LeadService {
@@ -133,7 +133,7 @@ export class LeadService {
       where: { id },
       data,
     });
-    await this.invalidateLeadCaches(tenantId);
+    await this.invalidateLeadCaches(tenantId, id);
     return lead;
   }
 
@@ -147,7 +147,7 @@ export class LeadService {
       where: { id },
       data: { deletedAt: new Date() },
     });
-    await this.invalidateLeadCaches(tenantId);
+    await this.invalidateLeadCaches(tenantId, id);
     return lead;
   }
 
@@ -174,7 +174,7 @@ export class LeadService {
       agentName: agent.name,
     });
 
-    await this.invalidateLeadCaches(tenantId);
+    await this.invalidateLeadCaches(tenantId, leadId);
     return updated;
   }
 
@@ -205,7 +205,7 @@ export class LeadService {
     });
     if (!property) throw new NotFoundException(this.i18n.t('properties.property_not_found'));
 
-    const commission = calculateCommission(lead.assignedTo as AgentForCommission, dto.finalSaleValue);
+    const commission = CommissionCalculator.calculate(lead.assignedTo as AgentForCommission, dto.finalSaleValue);
 
     const updated = await this.tenantPrisma.client.$transaction(async (tx) => {
       const u = await tx.lead.update({
@@ -250,7 +250,7 @@ export class LeadService {
       return u;
     });
 
-    await this.invalidateLeadCaches(tenantId);
+    await this.invalidateLeadCaches(tenantId, leadId);
     await this.redis.del(CACHE_KEYS.commissionPending(tenantId));
     return updated;
   }

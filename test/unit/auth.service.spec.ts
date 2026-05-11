@@ -5,7 +5,8 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { JwtService } from '@nestjs/jwt';
 import type { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
-import bcrypt from 'bcryptjs';
+import { I18nService } from 'nestjs-i18n';
+import * as bcrypt from 'bcryptjs';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -13,6 +14,7 @@ describe('AuthService', () => {
   let mockJwt: any;
   let mockConfig: any;
   let mockRes: any;
+  let mockI18n: any;
 
   beforeEach(() => {
     mockPrisma = {
@@ -44,11 +46,15 @@ describe('AuthService', () => {
       cookie: jest.fn(),
       clearCookie: jest.fn(),
     };
+    mockI18n = {
+      t: jest.fn((key) => key),
+    };
 
     service = new AuthService(
       mockPrisma as unknown as PrismaService,
       mockJwt as unknown as JwtService,
       mockConfig as unknown as ConfigService,
+      mockI18n as unknown as I18nService,
     );
   });
 

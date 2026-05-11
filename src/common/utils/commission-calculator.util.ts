@@ -9,25 +9,27 @@ export type AgentForCommission = {
   fixedCommissionAmount: Prisma.Decimal | null;
 };
 
-export function calculateCommission(agent: AgentForCommission, saleValue: number): Decimal {
-  if (saleValue <= 0) {
-    throw new BadRequestException('Sale value must be a positive number');
-  }
-  if (agent.commissionType === CommissionType.PERCENT) {
-    if (agent.commissionRate === null || agent.commissionRate === undefined) {
-      throw new BadRequestException(`Commission rate not configured for agent ${agent.id}`);
+export class CommissionCalculator {
+  static calculate(agent: AgentForCommission, saleValue: number): Decimal {
+    if (saleValue <= 0) {
+      throw new BadRequestException('Sale value must be a positive number');
     }
-    const rate = new Decimal(agent.commissionRate.toString());
-    if (rate.lessThan(0) || rate.greaterThan(100)) {
-      throw new BadRequestException(`Commission rate ${rate.toString()} is out of valid range (0–100)`);
+    if (agent.commissionType === CommissionType.PERCENT) {
+      if (agent.commissionRate === null || agent.commissionRate === undefined) {
+        throw new BadRequestException(`Commission rate not configured for agent ${agent.id}`);
+      }
+      const rate = new Decimal(agent.commissionRate.toString());
+      if (rate.lessThan(0) || rate.greaterThan(100)) {
+        throw new BadRequestException(`Commission rate ${rate.toString()} is out of valid range (0–100)`);
+      }
+      return new Decimal(saleValue).mul(rate).div(100).toDecimalPlaces(2);
     }
-    return new Decimal(saleValue).mul(rate).div(100).toDecimalPlaces(2);
-  }
-  if (agent.commissionType === CommissionType.FIXED) {
-    if (!agent.fixedCommissionAmount) {
-      throw new BadRequestException(`Fixed commission amount not set for agent ${agent.id}`);
+    if (agent.commissionType === CommissionType.FIXED) {
+      if (!agent.fixedCommissionAmount) {
+        throw new BadRequestException(`Fixed commission amount not set for agent ${agent.id}`);
+      }
+      return new Decimal(agent.fixedCommissionAmount.toString());
     }
-    return new Decimal(agent.fixedCommissionAmount.toString());
+    throw new BadRequestException('Unknown commission type');
   }
-  throw new BadRequestException('Unknown commission type');
 }

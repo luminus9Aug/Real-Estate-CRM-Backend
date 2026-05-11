@@ -10,8 +10,7 @@ import type Redis from 'ioredis';
 import { CACHE_KEYS } from '../../common/constants/app.constants';
 import { REDIS } from '../../redis/redis.module';
 import { PayCommissionDto } from './dto/pay-commission.dto';
-import { calculateCommission } from '../../common/utils/commission-calculator.util';
-import { AgentForCommission } from '../../common/utils/commission-calculator.util';
+import { CommissionCalculator, AgentForCommission } from '../../common/utils/commission-calculator.util';
 
 @Injectable()
 export class CommissionService {

@@ -125,7 +125,7 @@ const run = process.env.RUN_E2E === '1';
 
     // Assign to agent
     await request(app.getHttpServer())
-      .patch(`/api/v1/leads/${leadId}/assign`)
+      .post(`/api/v1/leads/${leadId}/assign`)
       .set('Cookie', ownerCookie)
       .send({ agentId });
 

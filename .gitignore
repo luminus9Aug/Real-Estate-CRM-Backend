@@ -1,11 +1,8 @@
 node_modules
 dist
-.env
-.env.local
 *.log
 coverage
 .idea
 .vscode
-.env.development
 .env.example
-.env.production
+config.bat
