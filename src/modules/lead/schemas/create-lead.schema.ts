@@ -15,7 +15,7 @@ export const BaseLeadSchema = z.object({
   preferredPropertyId: z.string().optional(),
 });
 
-const budgetRefinement = (data: any) => {
+const budgetRefinement = (data: { budgetMin?: number; budgetMax?: number }) => {
   if (data.budgetMin !== undefined && data.budgetMax !== undefined) {
     return data.budgetMax >= data.budgetMin;
   }

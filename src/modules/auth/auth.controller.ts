@@ -22,6 +22,7 @@ export class AuthController {
     return this.auth.login(dto, res);
   }
 
+  @Public()
   @Post('logout')
   logout(@Res({ passthrough: true }) res: Response): void {
     this.auth.logout(res);

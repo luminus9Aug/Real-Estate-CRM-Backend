@@ -4,8 +4,10 @@ import { WhatsappQueueModule } from '../../queues/whatsapp/whatsapp.queue.module
 import { MessageController } from './message.controller';
 import { MessageService } from './message.service';
 
+import { SubscriptionModule } from '../subscription/subscription.module';
+
 @Module({
-  imports: [WhatsappQueueModule, GatewayModule],
+  imports: [WhatsappQueueModule, GatewayModule, SubscriptionModule],
   controllers: [MessageController],
   providers: [MessageService],
 })

@@ -6,9 +6,19 @@ import { PropertyQueryDto } from './dto/property-query.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 import { PropertyService } from './property.service';
 
+import { UseGuards, ForbiddenException } from '@nestjs/common';
+import { SubscriptionActiveGuard } from '../../common/guards/subscription-active.guard';
+import { FeatureGateGuard } from '../../common/guards/feature-gate.guard';
+import { SubscriptionService } from '../subscription/subscription.service';
+import { FeatureKey } from '../../common/constants/features.constants';
+
+@UseGuards(SubscriptionActiveGuard, FeatureGateGuard)
 @Controller('properties')
 export class PropertyController {
-  constructor(private readonly properties: PropertyService) {}
+  constructor(
+    private readonly properties: PropertyService,
+    private readonly subscriptionService: SubscriptionService,
+  ) {}
 
   @Get()
   list(
@@ -29,10 +39,21 @@ export class PropertyController {
   }
 
   @Post()
-  create(
+  async create(
     @CurrentUser('tenantId') tenantId: string,
     @Body() dto: CreatePropertyDto,
   ): Promise<unknown> {
+    const count = await this.properties.countActiveProperties();
+    const ok = await this.subscriptionService.validateFeatureLimit(
+      tenantId,
+      FeatureKey.MAX_PROPERTIES,
+      count,
+    );
+
+    if (!ok) {
+      throw new ForbiddenException('Property limit reached for your plan. Please upgrade.');
+    }
+
     return this.properties.create(tenantId, dto);
   }
 
