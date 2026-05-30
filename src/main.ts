@@ -8,8 +8,6 @@ import helmet from "helmet";
 import { RedisIoAdapter } from "./common/adapters/redis-io.adapter";
 import { AppModule } from "./app.module";
 import { GlobalExceptionFilter } from "./common/filters/global-exception.filter";
-import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
-import { RolesGuard } from "./common/guards/roles.guard";
 import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 
@@ -64,7 +62,8 @@ async function bootstrap(): Promise<void> {
         origin === "http://localhost:3000" ||
         origin === "https://propertysales-os-fe.vercel.app" ||
         /^https:\/\/.*\.propertysales-os-fe\.vercel\.app$/.test(origin) ||
-        (process.env.ALLOW_ORIGINS && process.env.ALLOW_ORIGINS.split(",").includes(origin));
+        (process.env.ALLOW_ORIGINS &&
+          process.env.ALLOW_ORIGINS.split(",").includes(origin));
 
       cb(allowed ? null : new Error("CORS"), allowed);
     },
