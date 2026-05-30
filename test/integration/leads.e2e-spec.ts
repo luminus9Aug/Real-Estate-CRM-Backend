@@ -61,7 +61,7 @@ const run = process.env.RUN_E2E === '1';
     ownerCookie = signupRes.header['set-cookie'] as unknown as string[];
     
     const owner = await prisma.user.findUnique({ where: { tenantId_email: { tenantId: (await prisma.tenant.findUnique({where:{subdomain:'test'}}))!.id, email: 'owner@test.com' } } });
-    tenantId = owner!.tenantId;
+    tenantId = owner!.tenantId!;
     ownerId = owner!.id;
 
     // Create an Agent

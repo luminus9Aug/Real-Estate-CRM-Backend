@@ -1,11 +1,12 @@
-declare namespace Express {
-  interface User {
-    id: string;
-    tenantId: string;
-    role: import('@prisma/client').UserRole;
-    email: string;
-  }
-  interface Request {
-    correlationId?: string;
+import { AuthUser } from '../modules/auth/types/auth-user.type';
+
+declare global {
+  namespace Express {
+    interface User extends AuthUser {}
+    interface Request {
+      correlationId?: string;
+      rawBody?: Buffer;
+    }
   }
 }
+

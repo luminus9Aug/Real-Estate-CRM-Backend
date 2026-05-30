@@ -8,7 +8,7 @@ export class CorrelationIdMiddleware implements NestMiddleware {
     const headerVal = req.headers['x-correlation-id'];
     const id = typeof headerVal === 'string' && headerVal.length > 0 ? headerVal : randomUUID();
     req.headers['x-correlation-id'] = id;
-    (req as any).correlationId = id;
+    req.correlationId = id;
     next();
   }
 }

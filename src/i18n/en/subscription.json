@@ -1,0 +1,13 @@
+{
+  "active_subscription_required": "Active subscription required",
+  "subscription_expired": "Subscription expired. Please upgrade to continue.",
+  "trial_ended": "Trial period has ended. Please subscribe to continue.",
+  "plan_limit_reached": "Plan limit reached for {feature}. Please upgrade.",
+  "plan_changed_success": "Plan updated successfully",
+  "plan_change_limit": "Plan changes are limited to once per billing cycle",
+  "no_active_subscription": "No active subscription found",
+  "payment_failed": "Payment failed. Please try again.",
+  "agent_limit_reached": "Agent limit reached for your plan.",
+  "lead_limit_reached": "Monthly lead limit reached for your plan.",
+  "property_limit_reached": "Property limit reached for your plan."
+}

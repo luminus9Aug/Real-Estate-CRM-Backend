@@ -5,6 +5,13 @@ import { Public } from '../../common/decorators/public.decorator';
 import { SendMessageDto } from './dto/send-message.dto';
 import { MessageService } from './message.service';
 
+import { UseGuards } from '@nestjs/common';
+import { SubscriptionActiveGuard } from '../../common/guards/subscription-active.guard';
+import { FeatureGateGuard } from '../../common/guards/feature-gate.guard';
+import { RequireFeature } from '../../common/decorators/require-feature.decorator';
+import { FeatureKey } from '../../common/constants/features.constants';
+
+@UseGuards(SubscriptionActiveGuard, FeatureGateGuard)
 @Controller('messages')
 export class MessageController {
   constructor(private readonly messages: MessageService) {}
@@ -17,6 +24,7 @@ export class MessageController {
     return this.messages.list(leadId);
   }
 
+  @RequireFeature(FeatureKey.WHATSAPP_INTEGRATION)
   @Post()
   send(
     @CurrentUser('tenantId') tenantId: string,

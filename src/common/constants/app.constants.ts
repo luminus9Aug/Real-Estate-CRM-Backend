@@ -11,6 +11,9 @@ export const TENANT_SCOPED_MODELS = [
   'propertyview',
   'brochurelink',
   'commissiontransaction',
+  'subscription',
+  'invoice',
+  'auditlog',
 ] as const;
 
 export const CACHE_KEYS = {
@@ -19,4 +22,5 @@ export const CACHE_KEYS = {
   lead: (tenantId: string, leadId: string) => `lead:${tenantId}:${leadId}`,
   commissionPending: (tenantId: string) => `commission:pending:${tenantId}`,
   user: (tenantId: string, userId: string) => `user:${tenantId}:${userId}`,
+  features: (tenantId: string) => `features:${tenantId}`,
 } as const;

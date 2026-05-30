@@ -81,7 +81,7 @@ export class UserService {
     });
     if (!existing) throw new NotFoundException('User not found');
 
-    const data: any = { ...dto };
+    const data: Partial<UpdateUserDto> & { passwordHash?: string } = { ...dto };
     if (dto.password) {
       data.passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
       delete data.password;
@@ -91,7 +91,9 @@ export class UserService {
       where: { id },
       data,
     });
-    await this.invalidateUserCache(existing.tenantId, id);
+    if (existing.tenantId) {
+      await this.invalidateUserCache(existing.tenantId, id);
+    }
     return this.strip(user);
   }
 
@@ -105,7 +107,9 @@ export class UserService {
       where: { id },
       data: { deletedAt: new Date() },
     });
-    await this.invalidateUserCache(existing.tenantId, id);
+    if (existing.tenantId) {
+      await this.invalidateUserCache(existing.tenantId, id);
+    }
     return this.strip(user);
   }
 
@@ -114,8 +118,20 @@ export class UserService {
       where: { id: userId },
       data: { language: dto.language },
     });
-    await this.invalidateUserCache(user.tenantId, userId);
+    if (user.tenantId) {
+      await this.invalidateUserCache(user.tenantId, userId);
+    }
     return this.strip(user);
+  }
+
+  async countActiveAgents(): Promise<number> {
+    return this.tenantPrisma.client.user.count({
+      where: {
+        role: { in: [UserRole.AGENT, UserRole.MANAGER] },
+        deletedAt: null,
+        isActive: true,
+      },
+    });
   }
 
   private async invalidateUserCache(tenantId: string, userId: string): Promise<void> {

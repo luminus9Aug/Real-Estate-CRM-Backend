@@ -153,4 +153,12 @@ export class PropertyService {
 
     return { token, expiresAt };
   }
+
+  async countActiveProperties(): Promise<number> {
+    return this.tenantPrisma.client.property.count({
+      where: {
+        deletedAt: null,
+      },
+    });
+  }
 }

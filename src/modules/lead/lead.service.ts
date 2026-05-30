@@ -39,7 +39,7 @@ export class LeadService {
     private readonly i18n: I18nService,
   ) {}
 
-  private getQueryHash(query: any): string {
+  private getQueryHash(query: object): string {
     return crypto.createHash('md5').update(JSON.stringify(query)).digest('hex');
   }
 
@@ -273,6 +273,20 @@ export class LeadService {
 
     await this.invalidateLeadCaches(tenantId, leadId);
     return followUp;
+  }
+
+  async countMonthlyLeads(tenantId: string): Promise<number> {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    return this.tenantPrisma.client.lead.count({
+      where: {
+        tenantId,
+        createdAt: { gte: startOfMonth },
+        deletedAt: null,
+      },
+    });
   }
 
   private async invalidateLeadCaches(tenantId: string, leadId?: string): Promise<void> {

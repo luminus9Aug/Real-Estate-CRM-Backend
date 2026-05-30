@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TENANT_SCOPED_MODELS } from '../constants/app.constants';
+import { UserRole } from '../constants/roles.constants';
 
 @Injectable({ scope: Scope.REQUEST })
 export class TenantPrismaService {
@@ -14,7 +15,8 @@ export class TenantPrismaService {
     @Inject(REQUEST) private readonly req: Request,
   ) {
     const user = this.req.user;
-    const tenantId = user?.tenantId;
+    const tenantId = user?.tenantId as string | undefined;
+    const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
 
     this.client = this.prisma.$extends({
       query: {
@@ -22,6 +24,11 @@ export class TenantPrismaService {
           async $allOperations({ model, operation, args, query }) {
             const modelName = (model ?? '').toLowerCase();
             const isTenantModel = (TENANT_SCOPED_MODELS as readonly string[]).includes(modelName);
+
+            // SuperAdmins bypass tenant filtering for all models
+            if (isSuperAdmin) {
+              return query(args);
+            }
 
             if (!isTenantModel || !tenantId) {
               return query(args);

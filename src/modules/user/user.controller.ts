@@ -7,9 +7,19 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateLanguageDto } from './dto/update-language.dto';
 import { UserService } from './user.service';
 
+import { UseGuards, ForbiddenException } from '@nestjs/common';
+import { SubscriptionActiveGuard } from '../../common/guards/subscription-active.guard';
+import { FeatureGateGuard } from '../../common/guards/feature-gate.guard';
+import { SubscriptionService } from '../subscription/subscription.service';
+import { FeatureKey } from '../../common/constants/features.constants';
+
+@UseGuards(SubscriptionActiveGuard, FeatureGateGuard)
 @Controller('users')
 export class UserController {
-  constructor(private readonly users: UserService) {}
+  constructor(
+    private readonly users: UserService,
+    private readonly subscriptionService: SubscriptionService,
+  ) {}
 
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @Get()
@@ -32,7 +42,21 @@ export class UserController {
 
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @Post()
-  create(@CurrentUser('tenantId') tenantId: string, @Body() dto: CreateUserDto): Promise<Record<string, unknown>> {
+  async create(
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() dto: CreateUserDto,
+  ): Promise<Record<string, unknown>> {
+    const count = await this.users.countActiveAgents();
+    const ok = await this.subscriptionService.validateFeatureLimit(
+      tenantId,
+      FeatureKey.MAX_AGENTS,
+      count,
+    );
+
+    if (!ok) {
+      throw new ForbiddenException('Agent limit reached for your plan. Please upgrade.');
+    }
+
     return this.users.create(tenantId, dto);
   }
 
