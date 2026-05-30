@@ -14,14 +14,19 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create(AppModule);
   const logger = new Logger('Bootstrap');
   const config = app.get(ConfigService);
 
   const redisAdapter = new RedisIoAdapter(app);
-  const redisUrl = config.get<string>('redis.url') || 'redis://127.0.0.1:6379';
-  await redisAdapter.connectToRedis(redisUrl.replace('localhost', '127.0.0.1'));
-  app.useWebSocketAdapter(redisAdapter);
+  const redisUrl = (process.env.REDIS_URL || config.get<string>('redis.url') || 'redis://127.0.0.1:6379').replace('localhost', '127.0.0.1');
+  try {
+    await redisAdapter.connectToRedis(redisUrl);
+    app.useWebSocketAdapter(redisAdapter);
+  } catch (redisErr) {
+    logger.error(`Failed to connect WebSocket adapter to Redis at ${redisUrl}: ${String(redisErr)}`);
+    throw redisErr;
+  }
 
   app.use('/api/v1/messages/webhook/whatsapp', urlencoded({ extended: false }));
   app.use(cookieParser());
