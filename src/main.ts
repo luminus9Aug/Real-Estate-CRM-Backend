@@ -61,8 +61,10 @@ async function bootstrap(): Promise<void> {
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
       const allowed =
-        process.env.ALLOW_ORIGINS?.split(",").includes(origin) ||
-        "http://localhost:3000";
+        origin === "http://localhost:3000" ||
+        origin === "https://propertysales-os-fe.vercel.app" ||
+        /^https:\/\/.*\.propertysales-os-fe\.vercel\.app$/.test(origin) ||
+        (process.env.ALLOW_ORIGINS && process.env.ALLOW_ORIGINS.split(",").includes(origin));
 
       cb(allowed ? null : new Error("CORS"), allowed);
     },
