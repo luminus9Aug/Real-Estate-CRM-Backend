@@ -3,11 +3,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class PlanService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async findAllActive() {
     return this.prisma.plan.findMany({
-      where: { isActive: true, deletedAt: null },
+      where: { isActive: true, deletedAt: null, isDefault: false },
       include: { features: true },
       orderBy: { sortOrder: 'asc' },
     });
