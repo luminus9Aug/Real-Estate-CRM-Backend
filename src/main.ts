@@ -1,34 +1,40 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import cookieParser from 'cookie-parser';
-import { urlencoded } from 'express';
-import helmet from 'helmet';
-import { RedisIoAdapter } from './common/adapters/redis-io.adapter';
-import { AppModule } from './app.module';
-import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
-import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
-import { RolesGuard } from './common/guards/roles.guard';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { Logger, ValidationPipe } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { NestFactory } from "@nestjs/core";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import cookieParser from "cookie-parser";
+import { urlencoded } from "express";
+import helmet from "helmet";
+import { RedisIoAdapter } from "./common/adapters/redis-io.adapter";
+import { AppModule } from "./app.module";
+import { GlobalExceptionFilter } from "./common/filters/global-exception.filter";
+import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
+import { RolesGuard } from "./common/guards/roles.guard";
+import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
+import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  const logger = new Logger('Bootstrap');
+  const logger = new Logger("Bootstrap");
   const config = app.get(ConfigService);
 
   const redisAdapter = new RedisIoAdapter(app);
-  const redisUrl = (process.env.REDIS_URL || config.get<string>('redis.url') || 'redis://127.0.0.1:6379').replace('localhost', '127.0.0.1');
+  const redisUrl = (
+    process.env.REDIS_URL ||
+    config.get<string>("redis.url") ||
+    "redis://127.0.0.1:6379"
+  ).replace("localhost", "127.0.0.1");
   try {
     await redisAdapter.connectToRedis(redisUrl);
     app.useWebSocketAdapter(redisAdapter);
   } catch (redisErr) {
-    logger.error(`Failed to connect WebSocket adapter to Redis at ${redisUrl}: ${String(redisErr)}`);
+    logger.error(
+      `Failed to connect WebSocket adapter to Redis at ${redisUrl}: ${String(redisErr)}`,
+    );
     throw redisErr;
   }
 
-  app.use('/api/v1/messages/webhook/whatsapp', urlencoded({ extended: false }));
+  app.use("/api/v1/messages/webhook/whatsapp", urlencoded({ extended: false }));
   app.use(cookieParser());
 
   app.use(
@@ -38,8 +44,11 @@ async function bootstrap(): Promise<void> {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
-          imgSrc: ["'self'", 'https://res.cloudinary.com', 'data:'],
-          connectSrc: ["'self'", `wss://${process.env.API_DOMAIN ?? 'localhost:3001'}`],
+          imgSrc: ["'self'", "https://res.cloudinary.com", "data:"],
+          connectSrc: [
+            "'self'",
+            `wss://${process.env.API_DOMAIN ?? "localhost:3001"}`,
+          ],
           frameSrc: ["'none'"],
           objectSrc: ["'none'"],
         },
@@ -52,12 +61,14 @@ async function bootstrap(): Promise<void> {
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
       const allowed =
-        /^https:\/\/([a-z0-9-]+\.)?propertysales\.com$/.test(origin) || origin === 'http://localhost:3000';
-      cb(allowed ? null : new Error('CORS'), allowed);
+        process.env.ALLOW_ORIGINS?.split(",").includes(origin) ||
+        "http://localhost:3000";
+
+      cb(allowed ? null : new Error("CORS"), allowed);
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'x-lang', 'x-correlation-id'],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Accept", "x-lang", "x-correlation-id"],
   });
 
   app.useGlobalPipes(
@@ -71,25 +82,33 @@ async function bootstrap(): Promise<void> {
   );
 
   app.useGlobalFilters(new GlobalExceptionFilter());
-  app.useGlobalInterceptors(new TransformInterceptor(), new LoggingInterceptor());
+  app.useGlobalInterceptors(
+    new TransformInterceptor(),
+    new LoggingInterceptor(),
+  );
 
-  app.setGlobalPrefix('api/v1', { exclude: ['health'] });
+  app.setGlobalPrefix("api/v1", { exclude: ["health"] });
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('PropertySales OS API')
-    .setVersion('1.0')
-    .addCookieAuth('jwt')
+    .setTitle("PropertySales OS API")
+    .setVersion("1.0")
+    .addCookieAuth("jwt")
     .build();
-  SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swaggerConfig), {
-    useGlobalPrefix: false,
-  });
+  SwaggerModule.setup(
+    "api/docs",
+    app,
+    SwaggerModule.createDocument(app, swaggerConfig),
+    {
+      useGlobalPrefix: false,
+    },
+  );
 
   if (process.env.SENTRY_DSN) {
     try {
-      const Sentry = await import('@sentry/nestjs');
+      const Sentry = await import("@sentry/nestjs");
       Sentry.init({ dsn: process.env.SENTRY_DSN });
     } catch {
-      logger.warn('Sentry init skipped');
+      logger.warn("Sentry init skipped");
     }
   }
 
