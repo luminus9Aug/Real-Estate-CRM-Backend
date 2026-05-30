@@ -97,6 +97,8 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "ssh2",
       "bcrypt",
       "prisma",
       "@prisma/client",
@@ -107,3 +109,4 @@
     ]
   }
 }
+
