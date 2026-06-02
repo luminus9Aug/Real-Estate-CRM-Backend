@@ -12,21 +12,21 @@ export class TenantContextMiddleware implements NestMiddleware {
   constructor(private readonly prisma: PrismaService) {}
 
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
-    const user = req.user;
-    const tenantId = user?.tenantId;
-    
-    // SuperAdmins bypass tenant context for global access
-    if (user?.role === UserRole.SUPER_ADMIN) {
-      return next();
-    }
-
-    if (tenantId) {
-      try {
-        await this.prisma.$executeRaw`SELECT set_config('app.current_tenant_id', ${tenantId}::text, false)`;
-      } catch (err) {
-        throw new InternalServerErrorException('Failed to set tenant context');
+    const start = Date.now();
+    console.log(`[DEBUG] TenantContextMiddleware start for ${req.url}`);
+    try {
+      const user = req.user;
+      const tenantId = user?.tenantId;
+      
+      // SuperAdmins bypass tenant context for global access
+      if (user?.role === UserRole.SUPER_ADMIN) {
+        return next();
       }
+
+      // Tenant isolation is handled dynamically by TenantPrismaService extensions
+      next();
+    } finally {
+      console.log(`[DEBUG] TenantContextMiddleware took ${Date.now() - start}ms`);
     }
-    next();
   }
 }

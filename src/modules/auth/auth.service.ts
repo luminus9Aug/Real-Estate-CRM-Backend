@@ -1,15 +1,19 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { SupportedLanguage, SubscriptionStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AccessTokenPayload } from '../../types/jwt-payload';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 import { UserRole } from '../../common/constants/roles.constants';
+import type Redis from 'ioredis';
+import { REDIS } from '../../redis/redis.module';
+import { CACHE_KEYS } from '../../common/constants/app.constants';
+import { randomUUID } from 'crypto';
 
 const BCRYPT_ROUNDS = 10;
 
@@ -20,6 +24,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly i18n: I18nService,
+    @Inject(REDIS) private readonly redis: Redis,
   ) { }
 
   async signup(dto: SignupDto, res: Response): Promise<{ wsToken: string }> {
@@ -115,7 +120,21 @@ export class AuthService {
     return { wsToken };
   }
 
-  logout(res: Response): void {
+  logout(req: Request, res: Response): void {
+    const token = req.cookies?.jwt as string | undefined;
+    if (token) {
+      try {
+        const payload = this.jwt.verify<AccessTokenPayload>(token, {
+          secret: this.config.getOrThrow<string>('jwt.secret'),
+        });
+        if (payload.jti) {
+          const blockKey = CACHE_KEYS.jwtBlocklist(payload.jti);
+          this.redis.setex(blockKey, 604800, 'blocked').catch(() => {});
+        }
+      } catch {
+        // Ignored
+      }
+    }
     const secure = process.env.NODE_ENV === 'production';
     res.clearCookie('jwt', { httpOnly: true, secure, sameSite: 'lax', path: '/' });
     res.clearCookie('refresh', { httpOnly: true, secure, sameSite: 'lax', path: '/' });
@@ -194,6 +213,7 @@ export class AuthService {
       tenantId: user.tenantId,
       role: user.role as import('../../modules/auth/types/auth-user.type').AuthUser['role'],
       email: user.email,
+      jti: randomUUID(),
     };
     return this.jwt.sign(payload, {
       secret: this.config.getOrThrow<string>('jwt.secret'),

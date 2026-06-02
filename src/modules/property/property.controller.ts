@@ -51,7 +51,11 @@ export class PropertyController {
     );
 
     if (!ok) {
-      throw new ForbiddenException('Property limit reached for your plan. Please upgrade.');
+      throw new ForbiddenException({
+        code: 'PLAN_LIMIT_REACHED',
+        featureKey: FeatureKey.MAX_PROPERTIES,
+        message: 'Property limit reached for your plan. Please upgrade.',
+      });
     }
 
     return this.properties.create(tenantId, dto);

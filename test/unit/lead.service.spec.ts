@@ -6,6 +6,7 @@ import type { TenantPrismaService } from '../../src/common/utils/tenant-prisma.s
 import type { MessageGateway } from '../../src/gateways/message.gateway';
 import { I18nService } from 'nestjs-i18n';
 import type Redis from 'ioredis';
+import { QuotaCounterService } from '../../src/common/utils/quota-counter.service';
 
 describe('LeadService', () => {
   let service: LeadService;
@@ -13,6 +14,7 @@ describe('LeadService', () => {
   let mockRedis: any;
   let mockGateway: any;
   let mockI18n: any;
+  let mockQuotaCounter: any;
 
   beforeEach(() => {
     mockTenantPrisma = {
@@ -20,6 +22,7 @@ describe('LeadService', () => {
         lead: {
           findMany: jest.fn(),
           findFirst: jest.fn(),
+          findUnique: jest.fn(),
           create: jest.fn(),
           update: jest.fn(),
         },
@@ -28,6 +31,7 @@ describe('LeadService', () => {
         },
         property: {
           findFirst: jest.fn(),
+          update: jest.fn(),
         },
         $transaction: jest.fn((cb) => cb(mockTenantPrisma.client)),
         commissionTransaction: {
@@ -40,6 +44,8 @@ describe('LeadService', () => {
     };
     mockRedis = {
       del: jest.fn(),
+      get: jest.fn(),
+      set: jest.fn(),
     };
     mockGateway = {
       emitLeadAssigned: jest.fn(),
@@ -47,12 +53,19 @@ describe('LeadService', () => {
     mockI18n = {
       t: jest.fn((key) => key),
     };
+    mockQuotaCounter = {
+      increment: jest.fn(),
+      decrement: jest.fn(),
+      getCount: jest.fn(),
+      initFromDb: jest.fn(),
+    };
 
     service = new LeadService(
       mockTenantPrisma as unknown as TenantPrismaService,
       mockRedis as unknown as Redis,
       mockGateway as unknown as MessageGateway,
       mockI18n as unknown as I18nService,
+      mockQuotaCounter as unknown as QuotaCounterService,
     );
   });
 
@@ -69,12 +82,14 @@ describe('LeadService', () => {
 
   describe('findOne', () => {
     it('should throw NotFoundException if lead not found', async () => {
+      mockTenantPrisma.client.lead.findUnique.mockResolvedValue(null);
       mockTenantPrisma.client.lead.findFirst.mockResolvedValue(null);
       await expect(service.findOne('l1')).rejects.toThrow(NotFoundException);
     });
 
     it('should return lead if found', async () => {
-      const mockLead = { id: 'l1' };
+      const mockLead = { id: 'l1', tenantId: 't1' };
+      mockTenantPrisma.client.lead.findUnique.mockResolvedValue(mockLead);
       mockTenantPrisma.client.lead.findFirst.mockResolvedValue(mockLead);
       const result = await service.findOne('l1');
       expect(result).toBe(mockLead);

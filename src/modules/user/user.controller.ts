@@ -1,20 +1,28 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { UpdateLanguageDto } from './dto/update-language.dto';
-import { UserService } from './user.service';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+} from "@nestjs/common";
+import { UserRole } from "@prisma/client";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { Roles } from "../../common/decorators/roles.decorator";
+import { CreateUserDto } from "./dto/create-user.dto";
+import { UpdateUserDto } from "./dto/update-user.dto";
+import { UpdateLanguageDto } from "./dto/update-language.dto";
+import { UserService } from "./user.service";
 
-import { UseGuards, ForbiddenException } from '@nestjs/common';
-import { SubscriptionActiveGuard } from '../../common/guards/subscription-active.guard';
-import { FeatureGateGuard } from '../../common/guards/feature-gate.guard';
-import { SubscriptionService } from '../subscription/subscription.service';
-import { FeatureKey } from '../../common/constants/features.constants';
+import { UseGuards, ForbiddenException } from "@nestjs/common";
+import { SubscriptionActiveGuard } from "../../common/guards/subscription-active.guard";
+import { FeatureGateGuard } from "../../common/guards/feature-gate.guard";
+import { SubscriptionService } from "../subscription/subscription.service";
+import { FeatureKey } from "../../common/constants/features.constants";
 
 @UseGuards(SubscriptionActiveGuard, FeatureGateGuard)
-@Controller('users')
+@Controller("users")
 export class UserController {
   constructor(
     private readonly users: UserService,
@@ -23,27 +31,29 @@ export class UserController {
 
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @Get()
-  list(@CurrentUser('tenantId') tenantId: string): Promise<Record<string, unknown>[]> {
+  list(
+    @CurrentUser("tenantId") tenantId: string,
+  ): Promise<Record<string, unknown>[]> {
     return this.users.list(tenantId);
   }
 
-  @Put('me/language')
+  @Put("me/language")
   updateLanguage(
-    @CurrentUser('id') userId: string,
+    @CurrentUser("id") userId: string,
     @Body() dto: UpdateLanguageDto,
   ): Promise<Record<string, unknown>> {
     return this.users.updateLanguage(userId, dto);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string): Promise<Record<string, unknown>> {
+  @Get(":id")
+  findOne(@Param("id") id: string): Promise<Record<string, unknown>> {
     return this.users.findOne(id);
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @Post()
   async create(
-    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser("tenantId") tenantId: string,
     @Body() dto: CreateUserDto,
   ): Promise<Record<string, unknown>> {
     const count = await this.users.countActiveAgents();
@@ -54,21 +64,28 @@ export class UserController {
     );
 
     if (!ok) {
-      throw new ForbiddenException('Agent limit reached for your plan. Please upgrade.');
+      throw new ForbiddenException({
+        code: "PLAN_LIMIT_REACHED",
+        featureKey: FeatureKey.MAX_AGENTS,
+        message: "Agent limit reached for your plan. Please upgrade.",
+      });
     }
 
     return this.users.create(tenantId, dto);
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER)
-  @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateUserDto): Promise<Record<string, unknown>> {
+  @Put(":id")
+  update(
+    @Param("id") id: string,
+    @Body() dto: UpdateUserDto,
+  ): Promise<Record<string, unknown>> {
     return this.users.update(id, dto);
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER)
-  @Delete(':id')
-  remove(@Param('id') id: string): Promise<Record<string, unknown>> {
+  @Delete(":id")
+  remove(@Param("id") id: string): Promise<Record<string, unknown>> {
     return this.users.softDelete(id);
   }
 }

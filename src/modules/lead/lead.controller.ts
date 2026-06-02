@@ -49,7 +49,11 @@ export class LeadController {
     );
 
     if (!ok) {
-      throw new ForbiddenException('Monthly lead limit reached for your plan. Please upgrade.');
+      throw new ForbiddenException({
+        code: 'PLAN_LIMIT_REACHED',
+        featureKey: FeatureKey.MAX_LEADS_PER_MONTH,
+        message: 'Monthly lead limit reached for your plan. Please upgrade.',
+      });
     }
 
     return this.leads.create(tenantId, userId, dto);

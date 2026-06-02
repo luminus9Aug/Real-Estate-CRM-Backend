@@ -27,6 +27,7 @@ import { CreateLeadDto } from './dto/create-lead.dto';
 import { LeadFollowupDto } from './dto/lead-followup.dto';
 import { LeadQueryDto } from './dto/lead-query.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
+import { QuotaCounterService } from '../../common/utils/quota-counter.service';
 
 import { CommissionCalculator, AgentForCommission } from '../../common/utils/commission-calculator.util';
 
@@ -37,6 +38,7 @@ export class LeadService {
     @Inject(REDIS) private readonly redis: Redis,
     private readonly gateway: MessageGateway,
     private readonly i18n: I18nService,
+    private readonly quotaCounter: QuotaCounterService,
   ) {}
 
   private getQueryHash(query: object): string {
@@ -111,6 +113,7 @@ export class LeadService {
         preferredPropertyId: dto.preferredPropertyId,
       },
     });
+    await this.quotaCounter.increment(tenantId, 'MAX_LEADS_PER_MONTH');
     await this.invalidateLeadCaches(tenantId);
     return lead;
   }

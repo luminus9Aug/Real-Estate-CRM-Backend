@@ -5,4 +5,5 @@ export interface AccessTokenPayload {
   tenantId: string | null;
   role: UserRole;
   email: string;
+  jti?: string;
 }

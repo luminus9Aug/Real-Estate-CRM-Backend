@@ -11,6 +11,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateLanguageDto } from './dto/update-language.dto';
 import { Gender } from '@prisma/client';
 import { AvatarGenerator } from '../../common/utils/avatar-generator.util';
+import { QuotaCounterService } from '../../common/utils/quota-counter.service';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -20,6 +21,7 @@ export class UserService {
     private readonly tenantPrisma: TenantPrismaService,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly i18n: I18nService,
+    private readonly quotaCounter: QuotaCounterService,
   ) {}
 
   async list(tenantId: string): Promise<Record<string, unknown>[]> {
@@ -69,6 +71,9 @@ export class UserService {
           fixedCommissionAmount: dto.fixedCommissionAmount,
         },
       });
+      if (user.role === UserRole.AGENT || user.role === UserRole.MANAGER) {
+        await this.quotaCounter.increment(tenantId, 'MAX_AGENTS');
+      }
       return this.strip(user);
     } catch {
       throw new ConflictException(this.i18n.t('users.email_exists'));
@@ -109,6 +114,9 @@ export class UserService {
     });
     if (existing.tenantId) {
       await this.invalidateUserCache(existing.tenantId, id);
+      if (user.role === UserRole.AGENT || user.role === UserRole.MANAGER) {
+        await this.quotaCounter.decrement(existing.tenantId, 'MAX_AGENTS');
+      }
     }
     return this.strip(user);
   }

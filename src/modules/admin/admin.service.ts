@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SubscriptionStatus } from '@prisma/client';
+import type Redis from 'ioredis';
+import { REDIS } from '../../redis/redis.module';
 
 import { AuditService } from '../audit/audit.service';
 
@@ -9,6 +11,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
   async listAllTenants(page: number = 1, limit: number = 20) {
@@ -75,6 +78,8 @@ export class AdminService {
       details: { subdomain: tenant.subdomain },
     });
 
+    await this.clearTenantCache(id);
+
     return tenant;
   }
 
@@ -95,24 +100,88 @@ export class AdminService {
       details: { subdomain: tenant.subdomain },
     });
 
+    await this.clearTenantCache(id);
+
     return tenant;
   }
 
+  private async clearTenantCache(tenantId: string): Promise<void> {
+    const pattern = `tenant:${tenantId}:*`;
+    let cursor = '0';
+    do {
+      const [newCursor, keys] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      cursor = newCursor;
+      if (keys.length > 0) {
+        await this.redis.del(...keys);
+      }
+    } while (cursor !== '0');
+  }
+
   async getGlobalStats() {
-    const [tenantCount, activeUserCount, leadCount, propertyCount] = await Promise.all([
+    const [tenantCount, leadCount] = await Promise.all([
       this.prisma.tenant.count(),
-      this.prisma.user.count({ where: { deletedAt: null, isActive: true } }),
       this.prisma.lead.count({ where: { deletedAt: null } }),
-      this.prisma.property.count({ where: { deletedAt: null } }),
     ]);
 
+    const activeSubs = await this.prisma.subscription.findMany({
+      where: { status: SubscriptionStatus.ACTIVE },
+      include: { plan: true },
+    });
+
+    let mrr = 0;
+    for (const sub of activeSubs) {
+      const priceMonthly = Number(sub.plan.priceMonthlyINR || sub.plan.priceMonthly || 0);
+      const priceYearly = sub.plan.priceYearlyINR
+        ? Number(sub.plan.priceYearlyINR)
+        : sub.plan.priceYearly
+        ? Number(sub.plan.priceYearly)
+        : null;
+
+      if (sub.interval === 'YEARLY' && priceYearly) {
+        mrr += priceYearly / 12;
+      } else {
+        mrr += priceMonthly;
+      }
+    }
+
+    const arr = mrr * 12;
+    const now = new Date();
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [cancelledThisMonth, activeLastMonth] = await Promise.all([
+      this.prisma.subscription.count({
+        where: {
+          status: SubscriptionStatus.CANCELLED,
+          cancelledAt: { gte: startOfThisMonth },
+        },
+      }),
+      this.prisma.subscription.count({
+        where: {
+          createdAt: { lt: startOfThisMonth },
+          OR: [
+            { status: SubscriptionStatus.ACTIVE },
+            { status: SubscriptionStatus.TRIAL },
+            {
+              status: SubscriptionStatus.CANCELLED,
+              cancelledAt: { gte: startOfThisMonth },
+            },
+          ],
+        },
+      }),
+    ]);
+
+    const churnRate = activeLastMonth > 0 ? (cancelledThisMonth / activeLastMonth) * 100 : 0;
+
     return {
-      tenants: tenantCount,
-      users: activeUserCount,
-      leads: leadCount,
-      properties: propertyCount,
+      totalTenants: tenantCount,
+      activeSubscriptions: activeSubs.length,
+      mrr,
+      arr,
+      churnRate,
+      totalLeads: leadCount,
     };
   }
+
 
   async findAllPlans() {
     return this.prisma.plan.findMany({

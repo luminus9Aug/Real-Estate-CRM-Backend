@@ -11,6 +11,7 @@ import { BrochureLinkDto } from './dto/brochure-link.dto';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { PropertyQueryDto } from './dto/property-query.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
+import { QuotaCounterService } from '../../common/utils/quota-counter.service';
 
 @Injectable()
 export class PropertyService {
@@ -18,6 +19,7 @@ export class PropertyService {
     private readonly tenantPrisma: TenantPrismaService,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly i18n: I18nService,
+    private readonly quotaCounter: QuotaCounterService,
   ) {}
 
   async list(tenantId: string, query: PropertyQueryDto): Promise<{ items: unknown[]; nextCursor: string | null }> {
@@ -91,6 +93,7 @@ export class PropertyService {
         brochures: dto.brochures ?? [],
       },
     });
+    await this.quotaCounter.increment(tenantId, 'MAX_PROPERTIES');
     await this.redis.del(CACHE_KEYS.dashboardStats(tenantId));
     return property;
   }
@@ -124,6 +127,7 @@ export class PropertyService {
       where: { id },
       data: { deletedAt: new Date() },
     });
+    await this.quotaCounter.decrement(tenantId, 'MAX_PROPERTIES');
     await this.redis.del(CACHE_KEYS.dashboardStats(tenantId));
     return property;
   }

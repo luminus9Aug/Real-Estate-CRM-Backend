@@ -17,10 +17,18 @@ export const TENANT_SCOPED_MODELS = [
 ] as const;
 
 export const CACHE_KEYS = {
-  dashboardStats: (tenantId: string) => `dashboard:stats:${tenantId}`,
-  leadsList: (tenantId: string, hash: string) => `leads:list:${tenantId}:${hash}`,
-  lead: (tenantId: string, leadId: string) => `lead:${tenantId}:${leadId}`,
-  commissionPending: (tenantId: string) => `commission:pending:${tenantId}`,
-  user: (tenantId: string, userId: string) => `user:${tenantId}:${userId}`,
-  features: (tenantId: string) => `features:${tenantId}`,
+  dashboardStats: (tenantId: string) => `tenant:${tenantId}:dashboard:stats`,
+  leadsList: (tenantId: string, hash: string) => `tenant:${tenantId}:leads:list:${hash}`,
+  lead: (tenantId: string, leadId: string) => `tenant:${tenantId}:lead:${leadId}`,
+  commissionPending: (tenantId: string) => `tenant:${tenantId}:commission:pending`,
+  user: (tenantId: string, userId: string) => `tenant:${tenantId}:user:${userId}`,
+  features: (tenantId: string) => `tenant:${tenantId}:features`,
+  tenantSub: (tenantId: string) => `tenant:${tenantId}:sub`,
+  sessionUser: (tenantId: string, userId: string) => `tenant:${tenantId}:session:${userId}`,
+  jwtBlocklist: (jti: string) => `global:jwt:blocklist:${jti}`,
+  dashboardCharts: (tenantId: string) => `tenant:${tenantId}:dashboard:charts`,
+  dashboardActivity: (tenantId: string) => `tenant:${tenantId}:dashboard:activity`,
+  reportTeamCommission: (tenantId: string) => `tenant:${tenantId}:report:commission`,
+  reportAgentPerformance: (tenantId: string) => `tenant:${tenantId}:report:agentPerf`,
 } as const;
+

@@ -7,6 +7,12 @@ import type { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { I18nService } from 'nestjs-i18n';
 import * as bcrypt from 'bcryptjs';
+import type Redis from 'ioredis';
+
+jest.mock('bcryptjs', () => ({
+  compare: jest.fn(),
+  hash: jest.fn(),
+}));
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -15,12 +21,16 @@ describe('AuthService', () => {
   let mockConfig: any;
   let mockRes: any;
   let mockI18n: any;
+  let mockRedis: any;
 
   beforeEach(() => {
     mockPrisma = {
       tenant: {
         findUnique: jest.fn(),
         create: jest.fn(),
+      },
+      plan: {
+        findFirst: jest.fn(),
       },
       user: {
         findFirst: jest.fn(),
@@ -49,12 +59,18 @@ describe('AuthService', () => {
     mockI18n = {
       t: jest.fn((key) => key),
     };
+    mockRedis = {
+      setex: jest.fn().mockResolvedValue('OK'),
+      get: jest.fn(),
+      del: jest.fn(),
+    };
 
     service = new AuthService(
       mockPrisma as unknown as PrismaService,
       mockJwt as unknown as JwtService,
       mockConfig as unknown as ConfigService,
       mockI18n as unknown as I18nService,
+      mockRedis as unknown as Redis,
     );
   });
 
@@ -66,8 +82,10 @@ describe('AuthService', () => {
 
     it('should create tenant and user and set cookies', async () => {
       mockPrisma.tenant.findUnique.mockResolvedValue(null);
+      mockPrisma.plan.findFirst.mockResolvedValue({ id: 'free-plan', version: 1 });
       mockPrisma.tenant.create.mockResolvedValue({ id: 't1' });
       mockPrisma.user.create.mockResolvedValue({ id: 'u1', tenantId: 't1', role: UserRole.OWNER, email: 'test@test.com' });
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hash');
 
       const result = await service.signup({
         subdomain: 'new',
@@ -91,7 +109,7 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException if invalid credentials', async () => {
       mockPrisma.tenant.findUnique.mockResolvedValue({ id: 't1' });
       mockPrisma.user.findFirst.mockResolvedValue({ id: 'u1', passwordHash: 'hash' });
-      jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       await expect(service.login({ subdomain: 't1', email: 'e', password: 'p' } as any, mockRes)).rejects.toThrow(UnauthorizedException);
     });
@@ -99,7 +117,7 @@ describe('AuthService', () => {
     it('should login and set cookies', async () => {
       mockPrisma.tenant.findUnique.mockResolvedValue({ id: 't1' });
       mockPrisma.user.findFirst.mockResolvedValue({ id: 'u1', tenantId: 't1', role: UserRole.AGENT, email: 'e', passwordHash: 'hash', isActive: true });
-      jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       const result = await service.login({ subdomain: 't1', email: 'e', password: 'p' } as any, mockRes);
       expect(result.wsToken).toBe('token');

@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Type } from "class-transformer";
 import {
   IsArray,
   IsEnum,
@@ -7,8 +7,8 @@ import {
   IsOptional,
   IsString,
   MaxLength,
-} from 'class-validator';
-import { PropertyStatus, PropertyType } from '@prisma/client';
+} from "class-validator";
+import { PropertyStatus, PropertyType } from "@prisma/client";
 
 export class CreatePropertyDto {
   @IsString()
@@ -26,6 +26,11 @@ export class CreatePropertyDto {
   @IsOptional()
   @IsEnum(PropertyStatus)
   status?: PropertyStatus;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  area?: number;
 
   @IsOptional()
   @IsNumber()

@@ -1,9 +1,10 @@
 import { Global, Module, OnApplicationShutdown, Inject } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { QuotaCounterService } from '../common/utils/quota-counter.service';
+import { REDIS, BULL_REDIS } from './redis.constants';
 
-export const REDIS = 'REDIS';
-export const BULL_REDIS = 'BULL_REDIS';
+export { REDIS, BULL_REDIS };
 
 @Global()
 @Module({
@@ -25,8 +26,9 @@ export const BULL_REDIS = 'BULL_REDIS';
       },
       inject: [ConfigService],
     },
+    QuotaCounterService,
   ],
-  exports: [REDIS, BULL_REDIS],
+  exports: [REDIS, BULL_REDIS, QuotaCounterService],
 })
 export class RedisModule implements OnApplicationShutdown {
   constructor(

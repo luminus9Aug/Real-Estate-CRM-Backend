@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -7,12 +7,16 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import type { AccessTokenPayload } from '../../../types/jwt-payload';
 import type { AuthUser } from '../../../modules/auth/types/auth-user.type';
 import { UserRole } from '../../../common/constants/roles.constants';
+import type Redis from 'ioredis';
+import { REDIS } from '../../../redis/redis.module';
+import { CACHE_KEYS } from '../../../common/constants/app.constants';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
+    @Inject(REDIS) private readonly redis: Redis,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
@@ -24,7 +28,30 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: AccessTokenPayload): Promise<AuthUser> {
-    // SuperAdmins bypass tenant-level filtering
+    const start = Date.now();
+    try {
+      if (payload.jti) {
+        const isBlocked = await this.redis.exists(CACHE_KEYS.jwtBlocklist(payload.jti));
+        if (isBlocked) {
+          throw new UnauthorizedException('Token is revoked');
+        }
+      }
+
+      const sessionKey = CACHE_KEYS.sessionUser(payload.tenantId ?? 'global', payload.sub);
+      const cachedUser = await this.redis.get(sessionKey);
+      if (cachedUser) {
+        return JSON.parse(cachedUser) as AuthUser;
+      }
+
+      const result = await this.fetchAndVerifyUser(payload);
+      await this.redis.setex(sessionKey, 900, JSON.stringify(result)); // 15 min TTL
+      return result;
+    } finally {
+      console.log(`[DEBUG] JwtStrategy validate took ${Date.now() - start}ms`);
+    }
+  }
+
+  private async fetchAndVerifyUser(payload: AccessTokenPayload): Promise<AuthUser> {
     if (payload.role === UserRole.SUPER_ADMIN) {
       const user = await this.prisma.user.findFirst({
         where: {
@@ -48,8 +75,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       };
     }
 
-    // Set RLS session for standard users
-    await this.prisma.$executeRaw`SELECT set_config('app.current_tenant_id', ${payload.tenantId}::text, false)`;
+    // RLS is handled by TenantPrismaService extensions
 
     const user = await this.prisma.user.findFirst({
       where: {
