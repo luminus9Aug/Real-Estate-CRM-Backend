@@ -41,6 +41,7 @@ import { ContactModule } from './modules/contact/contact.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { FollowupQueueModule } from './queues/followup/followup.queue.module';
 import { WhatsappQueueModule } from './queues/whatsapp/whatsapp.queue.module';
+import { AuthEmailQueueModule } from './queues/auth-email/auth-email.queue.module';
 import { RedisModule, BULL_REDIS } from './redis/redis.module';
 import { TenantPrismaModule } from './tenant-prisma/tenant-prisma.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -90,6 +91,7 @@ import { billingConfig } from './config/billing.config';
     GatewayModule,
     WhatsappQueueModule,
     FollowupQueueModule,
+    AuthEmailQueueModule,
     HealthModule,
     AuthModule,
     UserModule,

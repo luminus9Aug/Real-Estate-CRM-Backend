@@ -14,7 +14,9 @@ export { REDIS, BULL_REDIS };
       provide: REDIS,
       useFactory: (config: ConfigService): Redis => {
         const url = (process.env.REDIS_URL || config.get<string>('redis.url') || 'redis://127.0.0.1:6379').replace('localhost', '127.0.0.1');
-        return new Redis(url, { maxRetriesPerRequest: null });
+        const client = new Redis(url, { maxRetriesPerRequest: null });
+        client.on('error', (err) => console.error('[Redis Error - REDIS]', err.message));
+        return client;
       },
       inject: [ConfigService],
     },
@@ -22,7 +24,9 @@ export { REDIS, BULL_REDIS };
       provide: BULL_REDIS,
       useFactory: (config: ConfigService): Redis => {
         const url = (process.env.REDIS_URL || config.get<string>('redis.url') || 'redis://127.0.0.1:6379').replace('localhost', '127.0.0.1');
-        return new Redis(url, { maxRetriesPerRequest: null, enableReadyCheck: false });
+        const client = new Redis(url, { maxRetriesPerRequest: null, enableReadyCheck: false });
+        client.on('error', (err) => console.error('[Redis Error - BULL_REDIS]', err.message));
+        return client;
       },
       inject: [ConfigService],
     },

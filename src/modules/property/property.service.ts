@@ -91,6 +91,7 @@ export class PropertyService {
         longitude: dto.longitude,
         images: dto.images ?? [],
         brochures: dto.brochures ?? [],
+        features: dto.features ?? [],
       },
     });
     await this.quotaCounter.increment(tenantId, 'MAX_PROPERTIES');
@@ -143,7 +144,8 @@ export class PropertyService {
     if (!property) throw new NotFoundException(this.i18n.t('properties.property_not_found'));
 
     const hours = dto.expiresInHours ?? 72;
-    const token = randomBytes(32).toString('hex');
+    const randomHex = randomBytes(12).toString('hex');
+    const token = `${tenantId}_${randomHex}`; // Composite token format
     const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000);
 
     await this.tenantPrisma.client.brochureLink.create({
@@ -156,6 +158,38 @@ export class PropertyService {
     });
 
     return { token, expiresAt };
+  }
+
+  async findByBrochureToken(token: string): Promise<unknown> {
+    const parts = token.split('_');
+    if (parts.length < 2) {
+      throw new NotFoundException(this.i18n.t('properties.property_not_found'));
+    }
+    const tenantId = parts[0];
+
+    const link = await this.tenantPrisma.client.brochureLink.findFirst({
+      where: {
+        token,
+        tenantId,
+      },
+      include: {
+        property: true,
+      },
+    });
+
+    if (!link || link.expiresAt < new Date() || link.property.deletedAt !== null) {
+      throw new NotFoundException(this.i18n.t('properties.property_not_found'));
+    }
+
+    // Increment openedCount asynchronously (non-blocking)
+    this.tenantPrisma.client.brochureLink.update({
+      where: { id: link.id },
+      data: { openedCount: { increment: 1 } },
+    }).catch(err => {
+      console.error('Failed to increment brochure link opened count:', err);
+    });
+
+    return link.property;
   }
 
   async countActiveProperties(): Promise<number> {

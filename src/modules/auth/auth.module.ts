@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { AuthEmailQueueModule } from '../../queues/auth-email/auth-email.queue.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         secret: config.getOrThrow<string>('jwt.secret'),
       }),
     }),
+    AuthEmailQueueModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

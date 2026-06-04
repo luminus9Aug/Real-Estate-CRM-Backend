@@ -30,5 +30,7 @@ export const CACHE_KEYS = {
   dashboardActivity: (tenantId: string) => `tenant:${tenantId}:dashboard:activity`,
   reportTeamCommission: (tenantId: string) => `tenant:${tenantId}:report:commission`,
   reportAgentPerformance: (tenantId: string) => `tenant:${tenantId}:report:agentPerf`,
+  otpCode: (email: string, subdomain: string) => `global:otp:${subdomain}:${email}`,
+  resetSession: (token: string) => `global:reset:session:${token}`,
 } as const;
 

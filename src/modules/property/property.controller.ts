@@ -11,6 +11,7 @@ import { SubscriptionActiveGuard } from '../../common/guards/subscription-active
 import { FeatureGateGuard } from '../../common/guards/feature-gate.guard';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { FeatureKey } from '../../common/constants/features.constants';
+import { Public } from '../../common/decorators/public.decorator';
 
 @UseGuards(SubscriptionActiveGuard, FeatureGateGuard)
 @Controller('properties')
@@ -82,5 +83,11 @@ export class PropertyController {
     @Body() dto: BrochureLinkDto,
   ): Promise<{ token: string; expiresAt: Date }> {
     return this.properties.createBrochureLink(id, tenantId, dto);
+  }
+
+  @Public()
+  @Get('brochure/:token')
+  findByBrochureToken(@Param('token') token: string): Promise<unknown> {
+    return this.properties.findByBrochureToken(token);
   }
 }

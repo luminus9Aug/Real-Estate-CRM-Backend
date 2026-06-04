@@ -74,4 +74,9 @@ export class CreatePropertyDto {
   @IsArray()
   @IsString({ each: true })
   brochures?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  features?: string[];
 }
