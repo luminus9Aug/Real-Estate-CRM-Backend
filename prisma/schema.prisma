@@ -20,6 +20,7 @@ enum LeadStatus {
   COLD
   LOST
   CONVERTED
+  HOLD
 }
 
 enum LeadSource {
@@ -385,6 +386,7 @@ model User {
   avatarUrl             String?           @db.Text @map("avatar_url")
   isActive              Boolean           @default(true) @map("is_active")
   isSuperAdmin          Boolean           @default(false) @map("is_super_admin")
+  hasFullDataAccess     Boolean           @default(false) @map("has_full_data_access")
   lastLoginAt           DateTime?         @map("last_login_at")
   birthday              DateTime?         @map("birthday")
   anniversary           DateTime?         @map("anniversary")
@@ -404,6 +406,7 @@ model User {
   sentMessages           Message[]                @relation("MessageSender")
   commissionTransactions CommissionTransaction[] @relation("AgentCommission")
   createdCommissions     CommissionTransaction[] @relation("CommissionCreatedBy")
+  assignedProperties     Property[]               @relation("AssignedProperty")
   blogPosts              BlogPost[]
 
   @@unique([tenantId, email])
@@ -468,6 +471,7 @@ model Lead {
 model Property {
   id          String         @id @default(cuid()) @map("id")
   tenantId    String         @map("tenant_id")
+  assignedToId String?       @map("assigned_to_id")
   title       String         @db.VarChar(200) @map("title")
   description String?        @db.Text @map("description")
   type        PropertyType   @map("type")
@@ -487,12 +491,14 @@ model Property {
   deletedAt   DateTime?      @map("deleted_at")
 
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedTo    User?          @relation("AssignedProperty", fields: [assignedToId], references: [id])
   preferredBy   Lead[]         @relation("PreferredProperty")
   closedBy      Lead[]         @relation("ClosedProperty")
   brochureLinks BrochureLink[]
 
   @@index([tenantId, status, type])
   @@index([tenantId, price])
+  @@index([tenantId, assignedToId])
   @@index([deletedAt])
   @@map("properties")
 }

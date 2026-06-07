@@ -3,11 +3,12 @@ import { UserController } from './user.controller';
 import { UserService } from './user.service';
 
 import { SubscriptionModule } from '../subscription/subscription.module';
+import { UserRepository } from './user.repository';
 
 @Module({
   imports: [SubscriptionModule],
   controllers: [UserController],
-  providers: [UserService],
-  exports: [UserService],
+  providers: [UserService, UserRepository],
+  exports: [UserService, UserRepository],
 })
 export class UserModule {}

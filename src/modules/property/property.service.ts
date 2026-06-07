@@ -4,25 +4,33 @@ import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import type Redis from 'ioredis';
 import { Inject } from '@nestjs/common';
-import { TenantPrismaService } from '../../common/utils/tenant-prisma.service';
+import { PropertyRepository } from './property.repository';
+import { UserRepository } from '../user/user.repository';
+import { BrochureLinkRepository } from './brochure-link.repository';
+import { AuthUser } from '../auth/types/auth-user.type';
 import { CACHE_KEYS } from '../../common/constants/app.constants';
 import { REDIS } from '../../redis/redis.module';
 import { BrochureLinkDto } from './dto/brochure-link.dto';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { PropertyQueryDto } from './dto/property-query.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
+import { AssignPropertyDto } from './dto/assign-property.dto';
 import { QuotaCounterService } from '../../common/utils/quota-counter.service';
+import { UserRole } from '../../common/constants/roles.constants';
+import { BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class PropertyService {
   constructor(
-    private readonly tenantPrisma: TenantPrismaService,
+    private readonly propertyRepository: PropertyRepository,
+    private readonly userRepository: UserRepository,
+    private readonly brochureLinkRepository: BrochureLinkRepository,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly i18n: I18nService,
     private readonly quotaCounter: QuotaCounterService,
   ) {}
 
-  async list(tenantId: string, query: PropertyQueryDto): Promise<{ items: unknown[]; nextCursor: string | null }> {
+  async list(user: AuthUser, query: PropertyQueryDto): Promise<{ items: unknown[]; nextCursor: string | null }> {
     const limit = Math.min(query.limit ?? 20, 100);
     const take = limit + 1;
     const where: Prisma.PropertyWhereInput = {
@@ -31,12 +39,21 @@ export class PropertyService {
       ...(query.type ? { type: query.type } : {}),
     };
 
-    const items = await this.tenantPrisma.client.property.findMany({
+    const items = await this.propertyRepository.findMany(user, {
       where,
       take,
       skip: query.cursor ? 1 : 0,
       cursor: query.cursor ? { id: query.cursor } : undefined,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: {
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
+      },
     });
 
     const hasMore = items.length > limit;
@@ -46,8 +63,8 @@ export class PropertyService {
     return { items: page, nextCursor };
   }
 
-  async map(tenantId: string): Promise<unknown[]> {
-    return this.tenantPrisma.client.property.findMany({
+  async map(user: AuthUser): Promise<unknown[]> {
+    return this.propertyRepository.findMany(user, {
       where: {
         deletedAt: null,
         latitude: { not: null },
@@ -66,18 +83,27 @@ export class PropertyService {
     });
   }
 
-  async findOne(id: string): Promise<unknown> {
-    const p = await this.tenantPrisma.client.property.findFirst({
+  async findOne(user: AuthUser, id: string): Promise<unknown> {
+    const p = await this.propertyRepository.findFirst(user, {
       where: { id, deletedAt: null },
+      include: {
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
+      },
     });
     if (!p) throw new NotFoundException(this.i18n.t('properties.property_not_found'));
     return p;
   }
 
-  async create(tenantId: string, dto: CreatePropertyDto): Promise<unknown> {
-    const property = await this.tenantPrisma.client.property.create({
+  async create(user: AuthUser, dto: CreatePropertyDto): Promise<unknown> {
+    const property = await this.propertyRepository.create(user, {
       data: {
-        tenantId,
+        tenantId: user.tenantId!,
         title: dto.title,
         description: dto.description,
         type: dto.type,
@@ -94,13 +120,15 @@ export class PropertyService {
         features: dto.features ?? [],
       },
     });
-    await this.quotaCounter.increment(tenantId, 'MAX_PROPERTIES');
-    await this.redis.del(CACHE_KEYS.dashboardStats(tenantId));
+    if (user.tenantId) {
+      await this.quotaCounter.increment(user.tenantId, 'MAX_PROPERTIES');
+      await this.redis.del(CACHE_KEYS.dashboardStats(user.tenantId));
+    }
     return property;
   }
 
-  async update(id: string, tenantId: string, dto: UpdatePropertyDto): Promise<unknown> {
-    const existing = await this.tenantPrisma.client.property.findFirst({
+  async update(user: AuthUser, id: string, dto: UpdatePropertyDto): Promise<unknown> {
+    const existing = await this.propertyRepository.findFirst(user, {
       where: { id, deletedAt: null },
     });
     if (!existing) throw new NotFoundException(this.i18n.t('properties.property_not_found'));
@@ -110,47 +138,74 @@ export class PropertyService {
       price: dto.price !== undefined ? new Prisma.Decimal(dto.price) : undefined,
     };
 
-    const property = await this.tenantPrisma.client.property.update({
+    const property = await this.propertyRepository.update(user, {
       where: { id },
       data,
     });
-    await this.redis.del(CACHE_KEYS.dashboardStats(tenantId));
+    if (user.tenantId) {
+      await this.redis.del(CACHE_KEYS.dashboardStats(user.tenantId));
+    }
     return property;
   }
 
-  async softDelete(id: string, tenantId: string): Promise<unknown> {
-    const existing = await this.tenantPrisma.client.property.findFirst({
+  async softDelete(user: AuthUser, id: string): Promise<unknown> {
+    const existing = await this.propertyRepository.findFirst(user, {
       where: { id, deletedAt: null },
     });
     if (!existing) throw new NotFoundException(this.i18n.t('properties.property_not_found'));
 
-    const property = await this.tenantPrisma.client.property.update({
+    const property = await this.propertyRepository.softDelete(user, {
       where: { id },
-      data: { deletedAt: new Date() },
+      data: {}
     });
-    await this.quotaCounter.decrement(tenantId, 'MAX_PROPERTIES');
-    await this.redis.del(CACHE_KEYS.dashboardStats(tenantId));
+    if (user.tenantId) {
+      await this.quotaCounter.decrement(user.tenantId, 'MAX_PROPERTIES');
+      await this.redis.del(CACHE_KEYS.dashboardStats(user.tenantId));
+    }
     return property;
   }
 
+  async assign(user: AuthUser, propertyId: string, dto: AssignPropertyDto): Promise<unknown> {
+    const property = await this.propertyRepository.findFirst(user, {
+      where: { id: propertyId, deletedAt: null },
+    });
+    if (!property) throw new NotFoundException(this.i18n.t('properties.property_not_found'));
+
+    if (dto.agentId) {
+      const agent = await this.userRepository.findFirst(user, {
+        where: {
+          id: dto.agentId,
+          role: { in: [UserRole.AGENT, UserRole.MANAGER] },
+          deletedAt: null,
+        },
+      });
+      if (!agent) throw new BadRequestException(this.i18n.t('common.invalid_agent'));
+    }
+
+    return this.propertyRepository.update(user, {
+      where: { id: propertyId },
+      data: { assignedToId: dto.agentId || null },
+    });
+  }
+
   async createBrochureLink(
+    user: AuthUser,
     propertyId: string,
-    tenantId: string,
     dto: BrochureLinkDto,
   ): Promise<{ token: string; expiresAt: Date }> {
-    const property = await this.tenantPrisma.client.property.findFirst({
+    const property = await this.propertyRepository.findFirst(user, {
       where: { id: propertyId, deletedAt: null },
     });
     if (!property) throw new NotFoundException(this.i18n.t('properties.property_not_found'));
 
     const hours = dto.expiresInHours ?? 72;
     const randomHex = randomBytes(12).toString('hex');
-    const token = `${tenantId}_${randomHex}`; // Composite token format
+    const token = `${user.tenantId}_${randomHex}`; // Composite token format
     const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000);
 
-    await this.tenantPrisma.client.brochureLink.create({
+    await this.brochureLinkRepository.create(user, {
       data: {
-        tenantId,
+        tenantId: user.tenantId!,
         propertyId,
         token,
         expiresAt,
@@ -167,7 +222,9 @@ export class PropertyService {
     }
     const tenantId = parts[0];
 
-    const link = await this.tenantPrisma.client.brochureLink.findFirst({
+    const userMock: AuthUser = { id: 'system', tenantId, role: 'AGENT', email: 'system', hasFullDataAccess: false };
+
+    const link = await this.brochureLinkRepository.findFirst(userMock, {
       where: {
         token,
         tenantId,
@@ -175,14 +232,14 @@ export class PropertyService {
       include: {
         property: true,
       },
-    });
+    }) as any;
 
     if (!link || link.expiresAt < new Date() || link.property.deletedAt !== null) {
       throw new NotFoundException(this.i18n.t('properties.property_not_found'));
     }
 
     // Increment openedCount asynchronously (non-blocking)
-    this.tenantPrisma.client.brochureLink.update({
+    this.brochureLinkRepository.update(userMock, {
       where: { id: link.id },
       data: { openedCount: { increment: 1 } },
     }).catch(err => {
@@ -192,8 +249,8 @@ export class PropertyService {
     return link.property;
   }
 
-  async countActiveProperties(): Promise<number> {
-    return this.tenantPrisma.client.property.count({
+  async countActiveProperties(user: AuthUser): Promise<number> {
+    return this.propertyRepository.count(user, {
       where: {
         deletedAt: null,
       },

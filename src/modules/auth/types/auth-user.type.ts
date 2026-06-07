@@ -6,4 +6,5 @@ export interface AuthUser {
   role: UserRole;
   email: string;
   isSuperAdmin?: boolean;
+  hasFullDataAccess: boolean;
 }

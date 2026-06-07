@@ -1,7 +1,7 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class AssignLeadDto {
   @IsString()
-  @IsNotEmpty()
-  agentId!: string;
+  @IsOptional()
+  agentId?: string | null;
 }

@@ -18,7 +18,7 @@ export const TENANT_SCOPED_MODELS = [
 
 export const CACHE_KEYS = {
   dashboardStats: (tenantId: string) => `tenant:${tenantId}:dashboard:stats`,
-  leadsList: (tenantId: string, hash: string) => `tenant:${tenantId}:leads:list:${hash}`,
+  leadsList: (tenantId: string, hash: string, agentId?: string) => agentId ? `tenant:${tenantId}:leads:list:agent:${agentId}:${hash}` : `tenant:${tenantId}:leads:list:all:${hash}`,
   lead: (tenantId: string, leadId: string) => `tenant:${tenantId}:lead:${leadId}`,
   commissionPending: (tenantId: string) => `tenant:${tenantId}:commission:pending`,
   user: (tenantId: string, userId: string) => `tenant:${tenantId}:user:${userId}`,
@@ -28,6 +28,7 @@ export const CACHE_KEYS = {
   jwtBlocklist: (jti: string) => `global:jwt:blocklist:${jti}`,
   dashboardCharts: (tenantId: string) => `tenant:${tenantId}:dashboard:charts`,
   dashboardActivity: (tenantId: string) => `tenant:${tenantId}:dashboard:activity`,
+  dashboardTeamPerformance: (tenantId: string) => `tenant:${tenantId}:dashboard:teamPerf`,
   reportTeamCommission: (tenantId: string) => `tenant:${tenantId}:report:commission`,
   reportAgentPerformance: (tenantId: string) => `tenant:${tenantId}:report:agentPerf`,
   otpCode: (email: string, subdomain: string) => `global:otp:${subdomain}:${email}`,

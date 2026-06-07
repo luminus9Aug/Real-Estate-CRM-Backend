@@ -2,7 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/com
 import { I18nService } from 'nestjs-i18n';
 import { CommissionStatus, CommissionType, UserRole } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
-import { TenantPrismaService } from '../../common/utils/tenant-prisma.service';
+import { CommissionTransactionRepository } from './commission-transaction.repository';
+import { AuthUser } from '../auth/types/auth-user.type';
 import { formatCurrencyAmount } from '../../common/utils/format-currency.util';
 import { MessageGateway } from '../../gateways/message.gateway';
 import { Inject } from '@nestjs/common';
@@ -15,7 +16,7 @@ import { CommissionCalculator, AgentForCommission } from '../../common/utils/com
 @Injectable()
 export class CommissionService {
   constructor(
-    private readonly tenantPrisma: TenantPrismaService,
+    private readonly commissionRepo: CommissionTransactionRepository,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly gateway: MessageGateway,
     private readonly i18n: I18nService,
@@ -23,12 +24,12 @@ export class CommissionService {
 
   // calculateCommission is now imported from common/utils
 
-  async listPending(tenantId: string): Promise<unknown[]> {
-    const cacheKey = CACHE_KEYS.commissionPending(tenantId);
+  async listPending(user: AuthUser): Promise<unknown[]> {
+    const cacheKey = CACHE_KEYS.commissionPending(user.tenantId ?? 'global');
     const cached = await this.redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
-    const items = await this.tenantPrisma.client.commissionTransaction.findMany({
+    const items = await this.commissionRepo.findMany(user, {
       where: { status: CommissionStatus.PENDING, voidedAt: null },
       orderBy: { calculatedAt: 'desc' },
     });
@@ -37,42 +38,40 @@ export class CommissionService {
     return items;
   }
 
-  async listMy(userId: string): Promise<unknown[]> {
-    return this.tenantPrisma.client.commissionTransaction.findMany({
-      where: { agentId: userId, voidedAt: null },
+  async listMy(user: AuthUser): Promise<unknown[]> {
+    return this.commissionRepo.findMany(user, {
+      where: { agentId: user.id, voidedAt: null },
       orderBy: { calculatedAt: 'desc' },
     });
   }
 
   async listForAgent(
+    user: AuthUser,
     agentId: string,
-    viewerId: string,
-    viewerRole: UserRole,
   ): Promise<unknown[]> {
-    if (viewerRole === UserRole.VIEWER) {
+    if (user.role === UserRole.VIEWER) {
       throw new ForbiddenException();
     }
-    if (viewerRole === UserRole.AGENT && agentId !== viewerId) {
+    if (user.role === UserRole.AGENT && agentId !== user.id) {
       throw new ForbiddenException();
     }
-    return this.tenantPrisma.client.commissionTransaction.findMany({
+    return this.commissionRepo.findMany(user, {
       where: { agentId, voidedAt: null },
       orderBy: { calculatedAt: 'desc' },
     });
   }
 
   async payCommission(
+    user: AuthUser,
     commissionTxId: string,
-    tenantId: string,
-    _payingUserId: string,
     dto: PayCommissionDto,
   ): Promise<unknown> {
-    const updated = await this.tenantPrisma.client.$transaction(async (tx) => {
+    const updated = await this.commissionRepo['prisma'].$transaction(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ id: string; amount: unknown }>>`
         SELECT id, amount
         FROM commission_transactions
         WHERE id = ${commissionTxId}
-          AND tenant_id = ${tenantId}
+          AND tenant_id = ${user.tenantId}
           AND status = 'PENDING'
           AND voided_at IS NULL
         FOR UPDATE NOWAIT
@@ -82,7 +81,7 @@ export class CommissionService {
         throw new BadRequestException(this.i18n.t('commission.already_paid_or_not_found'));
       }
 
-      return tx.commissionTransaction.update({
+      return this.commissionRepo.update(user, {
         where: { id: locked[0].id },
         data: {
           status: CommissionStatus.PAID,
@@ -91,7 +90,7 @@ export class CommissionService {
           notes: dto.notes ?? null,
         },
         include: { lead: true },
-      });
+      }, tx);
     });
 
     const row = updated as {
@@ -101,15 +100,17 @@ export class CommissionService {
     };
 
     const amountNum = Number(row.amount.toString());
-    this.gateway.emitCommissionPaid(tenantId, {
-      commissionId: row.id,
-      amount: amountNum,
-      currency: row.currency,
-      amountFormatted: formatCurrencyAmount(amountNum, row.currency),
-    });
+    if (user.tenantId) {
+      this.gateway.emitCommissionPaid(user.tenantId, {
+        commissionId: row.id,
+        amount: amountNum,
+        currency: row.currency,
+        amountFormatted: formatCurrencyAmount(amountNum, row.currency),
+      });
 
-    await this.redis.del(CACHE_KEYS.commissionPending(tenantId));
-    await this.redis.del(CACHE_KEYS.dashboardStats(tenantId));
+      await this.redis.del(CACHE_KEYS.commissionPending(user.tenantId));
+      await this.redis.del(CACHE_KEYS.dashboardStats(user.tenantId));
+    }
 
     return updated;
   }

@@ -1,68 +1,82 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
-import type Redis from 'ioredis';
-import { I18nService } from 'nestjs-i18n';
-import { TenantPrismaService } from '../../common/utils/tenant-prisma.service';
-import { CACHE_KEYS } from '../../common/constants/app.constants';
-import { REDIS } from '../../redis/redis.module';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { UpdateLanguageDto } from './dto/update-language.dto';
-import { Gender } from '@prisma/client';
-import { AvatarGenerator } from '../../common/utils/avatar-generator.util';
-import { QuotaCounterService } from '../../common/utils/quota-counter.service';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from "@nestjs/common";
+import { UserRole } from "@prisma/client";
+import * as bcrypt from "bcryptjs";
+import type Redis from "ioredis";
+import { I18nService } from "nestjs-i18n";
+import { UserRepository } from "./user.repository";
+import { AuthUser } from "../auth/types/auth-user.type";
+import { CACHE_KEYS } from "../../common/constants/app.constants";
+import { REDIS } from "../../redis/redis.module";
+import { CreateUserDto } from "./dto/create-user.dto";
+import { UpdateUserDto } from "./dto/update-user.dto";
+import { UpdateLanguageDto } from "./dto/update-language.dto";
+import { ToggleFullAccessDto } from "./dto/toggle-full-access.dto";
+import { Gender } from "@prisma/client";
+import { AvatarGenerator } from "../../common/utils/avatar-generator.util";
+import { QuotaCounterService } from "../../common/utils/quota-counter.service";
 
 const BCRYPT_ROUNDS = 12;
 
 @Injectable()
 export class UserService {
   constructor(
-    private readonly tenantPrisma: TenantPrismaService,
+    private readonly userRepository: UserRepository,
     @Inject(REDIS) private readonly redis: Redis,
     private readonly i18n: I18nService,
     private readonly quotaCounter: QuotaCounterService,
   ) {}
 
-  async list(tenantId: string): Promise<Record<string, unknown>[]> {
-    const users = await this.tenantPrisma.client.user.findMany({
-      where: { deletedAt: null },
-      orderBy: { createdAt: 'desc' },
+  async list(user: AuthUser): Promise<Record<string, unknown>[]> {
+    const users = await this.userRepository.findMany(user, {
+      where: { deletedAt: null, id: { not: user.id } },
+      orderBy: { createdAt: "desc" },
     });
     return users.map((u) => this.strip(u));
   }
 
-  async findOne(id: string, tenantId?: string): Promise<Record<string, unknown>> {
-    const tId = tenantId || (await this.tenantPrisma.client.user.findUnique({ where: { id }, select: { tenantId: true } }))?.tenantId;
-    if (!tId) throw new NotFoundException(this.i18n.t('users.user_not_found'));
+  async findOne(user: AuthUser, id: string): Promise<Record<string, unknown>> {
+    const tId = user.tenantId;
+    if (!tId) throw new NotFoundException(this.i18n.t("users.user_not_found"));
 
-    const cacheKey = CACHE_KEYS.user(tId, id);
+    const cacheKey = CACHE_KEYS.user(tId ?? "global", id);
     const cached = await this.redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
-    const user = await this.tenantPrisma.client.user.findFirst({
+    const record = await this.userRepository.findFirst(user, {
       where: { id, deletedAt: null },
     });
-    if (!user) throw new NotFoundException(this.i18n.t('users.user_not_found'));
+    if (!record)
+      throw new NotFoundException(this.i18n.t("users.user_not_found"));
 
-    const result = this.strip(user);
-    await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 300);
+    const result = this.strip(record);
+    await this.redis.set(cacheKey, JSON.stringify(result), "EX", 300);
     return result;
   }
 
-  async create(tenantId: string, dto: CreateUserDto): Promise<Record<string, unknown>> {
+  async create(
+    user: AuthUser,
+    dto: CreateUserDto,
+  ): Promise<Record<string, unknown>> {
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
     try {
-      const user = await this.tenantPrisma.client.user.create({
+      const record = await this.userRepository.create(user, {
         data: {
-          tenantId,
+          tenantId: user.tenantId,
           email: dto.email,
           name: dto.name,
           phone: dto.phone,
           role: dto.role,
           gender: dto.gender || Gender.MALE,
           passwordHash,
-          avatarUrl: dto.avatarUrl || AvatarGenerator.generate(dto.gender || Gender.MALE, dto.role),
+          avatarUrl:
+            dto.avatarUrl ||
+            AvatarGenerator.generate(dto.gender || Gender.MALE, dto.role),
           birthday: dto.birthday,
           anniversary: dto.anniversary,
           isActive: dto.isActive ?? true,
@@ -71,20 +85,26 @@ export class UserService {
           fixedCommissionAmount: dto.fixedCommissionAmount,
         },
       });
-      if (user.role === UserRole.AGENT || user.role === UserRole.MANAGER) {
-        await this.quotaCounter.increment(tenantId, 'MAX_AGENTS');
+      if (record.role === UserRole.AGENT || record.role === UserRole.MANAGER) {
+        if (user.tenantId) {
+          await this.quotaCounter.increment(user.tenantId, "MAX_AGENTS");
+        }
       }
-      return this.strip(user);
+      return this.strip(record);
     } catch {
-      throw new ConflictException(this.i18n.t('users.email_exists'));
+      throw new ConflictException(this.i18n.t("users.email_exists"));
     }
   }
 
-  async update(id: string, dto: UpdateUserDto): Promise<Record<string, unknown>> {
-    const existing = await this.tenantPrisma.client.user.findFirst({
+  async update(
+    user: AuthUser,
+    id: string,
+    dto: UpdateUserDto,
+  ): Promise<Record<string, unknown>> {
+    const existing = await this.userRepository.findFirst(user, {
       where: { id, deletedAt: null },
     });
-    if (!existing) throw new NotFoundException('User not found');
+    if (!existing) throw new NotFoundException("User not found");
 
     const data: Partial<UpdateUserDto> & { passwordHash?: string } = { ...dto };
     if (dto.password) {
@@ -92,48 +112,54 @@ export class UserService {
       delete data.password;
     }
 
-    const user = await this.tenantPrisma.client.user.update({
+    const record = await this.userRepository.update(user, {
       where: { id },
       data,
     });
     if (existing.tenantId) {
       await this.invalidateUserCache(existing.tenantId, id);
     }
-    return this.strip(user);
+    return this.strip(record);
   }
 
-  async softDelete(id: string): Promise<Record<string, unknown>> {
-    const existing = await this.tenantPrisma.client.user.findFirst({
+  async softDelete(
+    user: AuthUser,
+    id: string,
+  ): Promise<Record<string, unknown>> {
+    const existing = await this.userRepository.findFirst(user, {
       where: { id, deletedAt: null },
     });
-    if (!existing) throw new NotFoundException('User not found');
+    if (!existing) throw new NotFoundException("User not found");
 
-    const user = await this.tenantPrisma.client.user.update({
+    const record = await this.userRepository.softDelete(user, {
       where: { id },
-      data: { deletedAt: new Date() },
+      data: {},
     });
     if (existing.tenantId) {
       await this.invalidateUserCache(existing.tenantId, id);
-      if (user.role === UserRole.AGENT || user.role === UserRole.MANAGER) {
-        await this.quotaCounter.decrement(existing.tenantId, 'MAX_AGENTS');
+      if (record.role === UserRole.AGENT || record.role === UserRole.MANAGER) {
+        await this.quotaCounter.decrement(existing.tenantId, "MAX_AGENTS");
       }
     }
-    return this.strip(user);
+    return this.strip(record);
   }
 
-  async updateLanguage(userId: string, dto: UpdateLanguageDto): Promise<Record<string, unknown>> {
-    const user = await this.tenantPrisma.client.user.update({
-      where: { id: userId },
+  async updateLanguage(
+    user: AuthUser,
+    dto: UpdateLanguageDto,
+  ): Promise<Record<string, unknown>> {
+    const record = await this.userRepository.update(user, {
+      where: { id: user.id },
       data: { language: dto.language },
     });
-    if (user.tenantId) {
-      await this.invalidateUserCache(user.tenantId, userId);
+    if (record.tenantId) {
+      await this.invalidateUserCache(record.tenantId, user.id);
     }
-    return this.strip(user);
+    return this.strip(record);
   }
 
-  async countActiveAgents(): Promise<number> {
-    return this.tenantPrisma.client.user.count({
+  async countActiveAgents(user: AuthUser): Promise<number> {
+    return this.userRepository.count(user, {
       where: {
         role: { in: [UserRole.AGENT, UserRole.MANAGER] },
         deletedAt: null,
@@ -142,12 +168,54 @@ export class UserService {
     });
   }
 
-  private async invalidateUserCache(tenantId: string, userId: string): Promise<void> {
+  async toggleFullAccess(
+    caller: AuthUser,
+    targetUserId: string,
+    dto: ToggleFullAccessDto,
+  ): Promise<Record<string, unknown>> {
+    const target = await this.userRepository.findFirst(caller, {
+      where: { id: targetUserId, deletedAt: null },
+    });
+    if (!target)
+      throw new NotFoundException(this.i18n.t("users.user_not_found"));
+
+    const ELEVATED_ROLES: UserRole[] = [
+      UserRole.OWNER,
+      UserRole.MANAGER,
+      UserRole.SUPER_ADMIN,
+    ];
+    if (ELEVATED_ROLES.includes(target.role as UserRole)) {
+      throw new BadRequestException(
+        "Full access flag is only applicable to AGENT and VIEWER roles",
+      );
+    }
+
+    const updated = await this.userRepository.update(caller, {
+      where: { id: targetUserId },
+      data: { hasFullDataAccess: dto.hasFullDataAccess },
+    });
+
+    if (target.tenantId) {
+      const sessionKey = CACHE_KEYS.sessionUser(target.tenantId, targetUserId);
+      await this.redis.del(sessionKey);
+      await this.invalidateUserCache(target.tenantId, targetUserId);
+    }
+
+    return this.strip(updated);
+  }
+
+  private async invalidateUserCache(
+    tenantId: string,
+    userId: string,
+  ): Promise<void> {
     await this.redis.del(CACHE_KEYS.user(tenantId, userId));
     await this.redis.del(CACHE_KEYS.dashboardStats(tenantId));
   }
 
-  private strip(user: { passwordHash: string; [k: string]: unknown }): Record<string, unknown> {
+  private strip(user: {
+    passwordHash: string;
+    [k: string]: unknown;
+  }): Record<string, unknown> {
     const { passwordHash: _p, ...rest } = user;
     return rest;
   }

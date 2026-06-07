@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthUser } from '../auth/types/auth-user.type';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PayCommissionDto } from './dto/pay-commission.dto';
 import { CommissionService } from './commission.service';
@@ -10,32 +11,30 @@ export class CommissionController {
   constructor(private readonly commission: CommissionService) {}
 
   @Get('pending')
-  pending(@CurrentUser('tenantId') tenantId: string): Promise<unknown[]> {
-    return this.commission.listPending(tenantId);
+  pending(@CurrentUser() user: AuthUser): Promise<unknown[]> {
+    return this.commission.listPending(user);
   }
 
   @Get('my')
-  my(@CurrentUser('id') userId: string): Promise<unknown[]> {
-    return this.commission.listMy(userId);
+  my(@CurrentUser() user: AuthUser): Promise<unknown[]> {
+    return this.commission.listMy(user);
   }
 
   @Get('agent/:agentId')
   forAgent(
+    @CurrentUser() user: AuthUser,
     @Param('agentId') agentId: string,
-    @CurrentUser('id') viewerId: string,
-    @CurrentUser('role') role: UserRole,
   ): Promise<unknown[]> {
-    return this.commission.listForAgent(agentId, viewerId, role);
+    return this.commission.listForAgent(user, agentId);
   }
 
   @Roles(UserRole.OWNER)
   @Post(':id/pay')
   pay(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @CurrentUser('tenantId') tenantId: string,
-    @CurrentUser('id') userId: string,
     @Body() dto: PayCommissionDto,
   ): Promise<unknown> {
-    return this.commission.payCommission(id, tenantId, userId, dto);
+    return this.commission.payCommission(user, id, dto);
   }
 }

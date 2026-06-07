@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthUser } from '../auth/types/auth-user.type';
 import { CreateFollowupDto } from './dto/create-followup.dto';
 import { FollowupService } from './followup.service';
 
@@ -8,20 +9,20 @@ export class FollowupController {
   constructor(private readonly followups: FollowupService) {}
 
   @Get()
-  list(@CurrentUser('tenantId') tenantId: string): Promise<unknown[]> {
-    return this.followups.list(tenantId);
+  list(@CurrentUser() user: AuthUser): Promise<unknown[]> {
+    return this.followups.list(user);
   }
 
   @Post()
   create(
-    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser() user: AuthUser,
     @Body() dto: CreateFollowupDto,
   ): Promise<unknown> {
-    return this.followups.create(tenantId, dto);
+    return this.followups.create(user, dto);
   }
 
   @Put(':id/complete')
-  complete(@Param('id') id: string): Promise<unknown> {
-    return this.followups.complete(id);
+  complete(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<unknown> {
+    return this.followups.complete(user, id);
   }
 }

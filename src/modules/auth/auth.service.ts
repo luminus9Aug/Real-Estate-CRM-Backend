@@ -214,22 +214,19 @@ export class AuthService {
     return { wsToken: this.signWsToken(user.id, user.tenantId ?? "") };
   }
 
-  async me(
-    userId: string,
-    tenantId?: string,
-  ): Promise<Record<string, unknown>> {
+  async me(user: import('./types/auth-user.type').AuthUser): Promise<Record<string, unknown>> {
     const where: { id: string; deletedAt: null; tenantId?: string } = {
-      id: userId,
+      id: user.id,
       deletedAt: null,
     };
-    if (tenantId) where.tenantId = tenantId;
+    if (user.tenantId) where.tenantId = user.tenantId;
 
-    const user = await this.prisma.user.findFirst({ where });
+    const dbUser = await this.prisma.user.findFirst({ where });
 
-    if (!user) {
+    if (!dbUser) {
       throw new UnauthorizedException();
     }
-    return this.stripUser(user);
+    return this.stripUser(dbUser);
   }
 
   private stripUser(user: {

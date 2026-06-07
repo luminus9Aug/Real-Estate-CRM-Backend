@@ -1,32 +1,35 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { TenantPrismaService } from '../../common/utils/tenant-prisma.service';
+import { FollowUpRepository } from './followup.repository';
+import { LeadRepository } from '../lead/lead.repository';
+import { AuthUser } from '../auth/types/auth-user.type';
 import { FollowupProducer } from '../../queues/followup/followup.producer';
 import { CreateFollowupDto } from './dto/create-followup.dto';
 
 @Injectable()
 export class FollowupService {
   constructor(
-    private readonly tenantPrisma: TenantPrismaService,
+    private readonly followupRepository: FollowUpRepository,
+    private readonly leadRepository: LeadRepository,
     private readonly followupProducer: FollowupProducer,
   ) {}
 
-  async list(tenantId: string): Promise<unknown[]> {
-    return this.tenantPrisma.client.followUp.findMany({
-      where: { tenantId, completedAt: null },
+  async list(user: AuthUser): Promise<unknown[]> {
+    return this.followupRepository.findMany(user, {
+      where: { completedAt: null },
       orderBy: { dueAt: 'asc' },
       include: { lead: true, assignedTo: true },
     });
   }
 
-  async create(tenantId: string, dto: CreateFollowupDto): Promise<unknown> {
-    const lead = await this.tenantPrisma.client.lead.findFirst({
+  async create(user: AuthUser, dto: CreateFollowupDto): Promise<unknown> {
+    const lead = await this.leadRepository.findFirst(user, {
       where: { id: dto.leadId, deletedAt: null },
     });
     if (!lead) throw new NotFoundException('Lead not found');
 
-    const followUp = await this.tenantPrisma.client.followUp.create({
+    const followUp = await this.followupRepository.create(user, {
       data: {
-        tenantId,
+        tenantId: user.tenantId!,
         leadId: dto.leadId,
         assignedToId: dto.assignedToId,
         message: dto.message,
@@ -35,20 +38,22 @@ export class FollowupService {
       include: { lead: true },
     });
 
-    const delayMs = Math.max(0, new Date(dto.dueAt).getTime() - Date.now());
-    await this.followupProducer.scheduleCheck(tenantId, followUp.id, delayMs);
+    if (user.tenantId) {
+      const delayMs = Math.max(0, new Date(dto.dueAt).getTime() - Date.now());
+      await this.followupProducer.scheduleCheck(user.tenantId, followUp.id, delayMs);
+    }
 
     return followUp;
   }
 
-  async complete(id: string): Promise<unknown> {
-    const existing = await this.tenantPrisma.client.followUp.findFirst({
+  async complete(user: AuthUser, id: string): Promise<unknown> {
+    const existing = await this.followupRepository.findFirst(user, {
       where: { id, completedAt: null },
       include: { lead: true },
     });
     if (!existing) throw new NotFoundException('Follow-up not found');
 
-    return this.tenantPrisma.client.followUp.update({
+    return this.followupRepository.update(user, {
       where: { id },
       data: { completedAt: new Date() },
       include: { lead: true },

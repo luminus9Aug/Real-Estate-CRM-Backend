@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthUser } from '../auth/types/auth-user.type';
 import { Public } from '../../common/decorators/public.decorator';
 import { SendMessageDto } from './dto/send-message.dto';
 import { MessageService } from './message.service';
@@ -17,21 +18,20 @@ export class MessageController {
   constructor(private readonly messages: MessageService) {}
 
   @Get()
-  list(@Query('leadId') leadId: string): Promise<unknown[]> {
+  list(@CurrentUser() user: AuthUser, @Query('leadId') leadId: string): Promise<unknown[]> {
     if (!leadId) {
       return Promise.resolve([]);
     }
-    return this.messages.list(leadId);
+    return this.messages.list(user, leadId);
   }
 
   @RequireFeature(FeatureKey.WHATSAPP_INTEGRATION)
   @Post()
   send(
-    @CurrentUser('tenantId') tenantId: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: AuthUser,
     @Body() dto: SendMessageDto,
   ): Promise<unknown> {
-    return this.messages.send(tenantId, userId, dto);
+    return this.messages.send(user, dto);
   }
 
   @Public()

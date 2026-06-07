@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, UsePipes } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthUser } from '../auth/types/auth-user.type';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AssignLeadDto } from './dto/assign-lead.dto';
 import { CloseLeadDto } from './dto/close-lead.dto';
@@ -28,22 +29,21 @@ export class LeadController {
 
   @Get()
   list(
-    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser() user: AuthUser,
     @Query() query: LeadQueryDto,
   ): Promise<{ items: unknown[]; nextCursor: string | null }> {
-    return this.leads.list(tenantId, query);
+    return this.leads.list(user, query);
   }
 
   @Post()
   @UsePipes(new ZodValidationPipe(CreateLeadSchema))
   async create(
-    @CurrentUser('tenantId') tenantId: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: AuthUser,
     @Body() dto: CreateLeadDto,
   ): Promise<unknown> {
-    const count = await this.leads.countMonthlyLeads(tenantId);
+    const count = await this.leads.countMonthlyLeads(user);
     const ok = await this.subscriptionService.validateFeatureLimit(
-      tenantId,
+      user.tenantId!,
       FeatureKey.MAX_LEADS_PER_MONTH,
       count,
     );
@@ -56,57 +56,55 @@ export class LeadController {
       });
     }
 
-    return this.leads.create(tenantId, userId, dto);
+    return this.leads.create(user, dto);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): Promise<unknown> {
-    return this.leads.findOne(id);
+  findOne(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<unknown> {
+    return this.leads.findOne(user, id);
   }
 
   @Put(':id')
   @UsePipes(new ZodValidationPipe(UpdateLeadSchema))
   update(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @CurrentUser('tenantId') tenantId: string,
     @Body() dto: UpdateLeadDto,
   ): Promise<unknown> {
-    return this.leads.update(id, tenantId, dto);
+    return this.leads.update(user, id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser('tenantId') tenantId: string): Promise<unknown> {
-    return this.leads.softDelete(id, tenantId);
+  remove(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<unknown> {
+    return this.leads.softDelete(user, id);
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @Post(':id/assign')
   assign(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @CurrentUser('tenantId') tenantId: string,
     @Body() dto: AssignLeadDto,
   ): Promise<unknown> {
-    return this.leads.assign(id, tenantId, dto);
+    return this.leads.assign(user, id, dto);
   }
 
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @Post(':id/close')
   close(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @CurrentUser('tenantId') tenantId: string,
-    @CurrentUser('id') userId: string,
-    @CurrentUser('role') role: UserRole,
     @Body() dto: CloseLeadDto,
   ): Promise<unknown> {
-    return this.leads.closeLead(id, tenantId, dto, userId, role);
+    return this.leads.closeLead(user, id, dto);
   }
 
   @Post(':id/followup')
   followup(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @CurrentUser('tenantId') tenantId: string,
     @Body() dto: LeadFollowupDto,
   ): Promise<unknown> {
-    return this.leads.addFollowup(id, tenantId, dto);
+    return this.leads.addFollowup(user, id, dto);
   }
 }

@@ -72,6 +72,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         role: user.role as UserRole,
         email: user.email,
         isSuperAdmin: true,
+        hasFullDataAccess: true,
       };
     }
 
@@ -96,6 +97,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: user.role as UserRole,
       email: user.email,
       isSuperAdmin: false,
+      hasFullDataAccess: user.hasFullDataAccess,
     };
   }
 }

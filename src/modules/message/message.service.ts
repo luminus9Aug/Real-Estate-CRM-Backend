@@ -3,7 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { validateRequest } from 'twilio';
 import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
-import { TenantPrismaService } from '../../common/utils/tenant-prisma.service';
+import { MessageRepository } from './message.repository';
+import { LeadRepository } from '../lead/lead.repository';
+import { AuthUser } from '../auth/types/auth-user.type';
+import { UserRole } from '../../common/constants/roles.constants';
 import { MessageGateway } from '../../gateways/message.gateway';
 import { WhatsappProducer } from '../../queues/whatsapp/whatsapp.producer';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -11,54 +14,56 @@ import { SendMessageDto } from './dto/send-message.dto';
 @Injectable()
 export class MessageService {
   constructor(
-    private readonly tenantPrisma: TenantPrismaService,
+    private readonly messageRepository: MessageRepository,
+    private readonly leadRepository: LeadRepository,
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsappProducer,
     private readonly gateway: MessageGateway,
     private readonly config: ConfigService,
   ) {}
 
-  async list(leadId: string): Promise<unknown[]> {
-    return this.tenantPrisma.client.message.findMany({
+  async list(user: AuthUser, leadId: string): Promise<unknown[]> {
+    return this.messageRepository.findMany(user, {
       where: { leadId },
       orderBy: { createdAt: 'asc' },
     });
   }
 
   async send(
-    tenantId: string,
-    userId: string,
+    user: AuthUser,
     dto: SendMessageDto,
   ): Promise<unknown> {
-    const lead = await this.tenantPrisma.client.lead.findFirst({
+    const lead = await this.leadRepository.findFirst(user, {
       where: { id: dto.leadId, deletedAt: null },
     });
     if (!lead) throw new NotFoundException('Lead not found');
 
-    const message = await this.tenantPrisma.client.message.create({
+    const message = await this.messageRepository.create(user, {
       data: {
-        tenantId,
+        tenantId: user.tenantId!,
         leadId: dto.leadId,
-        senderId: userId,
+        senderId: user.id,
         content: dto.content,
         isFromLead: false,
       },
     });
 
     await this.whatsapp.enqueue({
-      tenantId,
+      tenantId: user.tenantId!,
       leadId: dto.leadId,
       messageId: message.id,
       toPhone: lead.phone,
       body: dto.content,
     });
 
-    this.gateway.emitNewMessage(tenantId, {
-      leadId: dto.leadId,
-      content: dto.content,
-      isFromLead: false,
-      createdAt: message.createdAt,
-    });
+    if (user.tenantId) {
+      this.gateway.emitNewMessage(user.tenantId, {
+        leadId: dto.leadId,
+        content: dto.content,
+        isFromLead: false,
+        createdAt: message.createdAt,
+      });
+    }
 
     return message;
   }
@@ -83,14 +88,16 @@ export class MessageService {
       return { ok: true };
     }
 
-    const lead = await this.prisma.lead.findFirst({
+    const systemUser: AuthUser = { id: 'system', tenantId: null, role: UserRole.SUPER_ADMIN, email: 'system', hasFullDataAccess: true };
+    const lead = await this.leadRepository.findFirst(systemUser, {
       where: { phone: from, deletedAt: null },
     });
     if (!lead) {
       return { ok: true };
     }
 
-    const message = await this.prisma.message.create({
+    const leadUser: AuthUser = { id: 'lead', tenantId: lead.tenantId, role: UserRole.AGENT, email: 'lead', hasFullDataAccess: false };
+    const message = await this.messageRepository.create(leadUser, {
       data: {
         tenantId: lead.tenantId,
         leadId: lead.id,

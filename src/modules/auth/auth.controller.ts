@@ -8,6 +8,7 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthUser } from './types/auth-user.type';
 
 @Controller('auth')
 export class AuthController {
@@ -63,7 +64,7 @@ export class AuthController {
   }
 
   @Get('me')
-  async me(@CurrentUser('id') userId: string, @CurrentUser('tenantId') tenantId: string): Promise<Record<string, unknown>> {
-    return this.auth.me(userId, tenantId);
+  async me(@CurrentUser() user: AuthUser): Promise<Record<string, unknown>> {
+    return this.auth.me(user);
   }
 }
