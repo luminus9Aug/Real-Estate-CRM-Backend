@@ -78,6 +78,7 @@ export class PropertyService {
         status: true,
         price: true,
         location: true,
+        images: true,   // needed for photo markers on the map
       },
       take: 500,
     });
